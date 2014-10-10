@@ -6,4 +6,5 @@ function __G__TRACKBACK__(errorMessage)
     print("----------------------------------------")
 end
 
+DataManager = {}
 require("app.MyApp").new():run()

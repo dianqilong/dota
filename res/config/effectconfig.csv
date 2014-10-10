@@ -1,0 +1,4 @@
+ID,ConfigName,ArmatureName,AnimationName,Type,ScaleX,ScaleY,C_Remove
+唯一标示,配置文件,骨骼名称,动画名,特效类型,横向缩放,纵向缩放,播放完成后删除
+e_red_light,effect/redLightAnimation.ExportJson,redLightAnimation,deathfinger,1,0,0,1
+e_blue_light,effect/blueLightAnimation.ExportJson,blueLightAnimation,stealmp,1,0,0.5,0
