@@ -1,5 +1,5 @@
 
-local Player = import("..roles.Player")
+local Hero = import("..roles.Hero")
 local SkillPanel = import("..ui.skillpanel")
 local dataManager = import("..datamanager.datamanager")
 local Enemy = import("..roles.enemy")
@@ -32,18 +32,15 @@ function MainScene:initScene()
     local background = display.newSprite("image/background.png", display.cx, display.cy)
     self:addChild(background)
 
-    -- 人物
-    local manager = ccs.ArmatureDataManager:getInstance()
-    manager:addArmatureFileInfo("armature/tauren.ExportJson")
-    manager:addArmatureFileInfo("armature/Hero.ExportJson")    
-    manager:addArmatureFileInfo("effect/redLightAnimation.ExportJson")
-    manager:addArmatureFileInfo("effect/blueLightAnimation.ExportJson")
+    self.hero = Hero.new("hero_lion", 1)
+    if self.hero.armature then
+        self:addChild(self.hero.armature)
+    end
 
-    self.enemy= Enemy.new()
-    self:addChild(self.enemy)
-
-    self.hero= Player.new()
-    self:addChild(self.hero)
+    self.enemy = Hero.new("hero_lion", 2)
+    if self.enemy.armature then
+        self:addChild(self.enemy.armature)
+    end
 
     self.skillPanel = SkillPanel.new(self, "hero_lion")
 
@@ -55,7 +52,7 @@ function MainScene:addTouchLayer()
         if eventName == "began" then
             self.hero:walkTo({x=x, y=y})
             if self.hero:getState() ~= 'walk' then
-                self.hero:doEvent("clickScreen", cc.p(x, y))
+                self.hero:doEvent("doWalk", cc.p(x, y))
             end
         end
     end

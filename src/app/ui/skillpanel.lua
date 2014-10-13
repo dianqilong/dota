@@ -16,11 +16,7 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
 
         local skillBtn_1 = cc.uiloader:seekNodeByTag(node, 1)
         skillBtn_1:onButtonClicked(function(event)
-        	-- Skill:UseSkill(heroID, heroInfo.Skill_1)
-        	local pos = cc.p(display.getRunningScene().hero:getPosition())
-        	local moveAction = cc.JumpTo:create(0.7, pos, 100, 1)
-
-        	display.getRunningScene().hero:runAction(moveAction)
+        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_1)
         	end)
         :setButtonImage("normal", "icon/skill_"..subheroID .. "_1.png")
         :setButtonImage("pressed", "icon/skill_"..subheroID .. "_1.png")
@@ -28,8 +24,8 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
 
         skillBtn_1 = cc.uiloader:seekNodeByTag(node, 2)
         skillBtn_1:onButtonClicked(function(event)
-        	-- Skill:UseSkill(heroID, heroInfo.Skill_2)
-        	display.getRunningScene().enemy:setVisible(not display.getRunningScene().enemy:isVisible())
+        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_2)
+        	-- display.getRunningScene().enemy.armature:setVisible(not display.getRunningScene().enemy.armature:isVisible())
 
         	end)
         :setButtonImage("normal", "icon/skill_"..subheroID .. "_2.png")
@@ -54,8 +50,8 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
 
         skillBtn_1 = cc.uiloader:seekNodeByTag(node, 5)
         skillBtn_1:onButtonClicked(function(event)
-        	if (display.getRunningScene().hero:getAnimation():getCurrentMovementID() ~= "attack") then
-        		display.getRunningScene().hero:doEvent("clickEnemy")
+        	if (display.getRunningScene().hero.armature:getAnimation():getCurrentMovementID() ~= "attack") then
+        		display.getRunningScene().hero:doEvent("doAttack")
         	end
         	end)
         :setButtonImage("normal", "icon/"..heroID .. ".png")
