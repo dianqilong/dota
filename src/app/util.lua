@@ -22,7 +22,12 @@ function loadCsvFile(filePath)
 	    -- 以标题作为索引，保存每一列的内容，取值的时候这样取：arrs[ID].Title
 	    arrs[content[1]] = {};
 	    for j = 1, #titles, 1 do
-	    	arrs[content[1]][titles[j]] = content[j];
+	    	local num = tonumber(content[j])
+	    	if num then
+	    		arrs[content[1]][titles[j]] = num;
+	    	else
+	    		arrs[content[1]][titles[j]] = content[j];
+	    	end
 	    end
 	end
 	return arrs;

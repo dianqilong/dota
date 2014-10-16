@@ -12,59 +12,44 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
         local heroInfo = DataManager:getHeroConf(heroID)
 
         local node = cc.uiloader:load("ui/SkillPanelUI/SkillPanelUI_1.json")
+        node.parent = parent
         parent:addChild(node)
+        local hero = parent.hero
 
-        local skillBtn_1 = cc.uiloader:seekNodeByTag(node, 1)
-        skillBtn_1:onButtonClicked(function(event)
-        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_1)
-        	end)
-        :setButtonImage("normal", "icon/skill_"..subheroID .. "_1.png")
-        :setButtonImage("pressed", "icon/skill_"..subheroID .. "_1.png")
-        :setButtonImage("disabled", "icon/skill_"..subheroID .. "_1.png")
+        node.btns = {}
+        -- 初始化技能图标
+        for i = 1, 4 do
+            node.btns[i] = cc.uiloader:seekNodeByTag(node, i)
+            node.btns[i]:setColor(cc.c3b(100, 100, 100))
+            node.btns[i]:onButtonClicked(function(event)
+                if hero.skillsReady[i] then
+                    hero:ReducePower(10000, i)
+                    Skill:UseSkill(hero, hero.skills[i])
+                end
+                end)
+            :setButtonImage("normal", "icon/skill_"..subheroID .. "_" .. i .. ".png")
+            :setButtonImage("pressed", "icon/skill_"..subheroID .. "_" .. i .. ".png")
+            :setButtonImage("disabled", "icon/skill_"..subheroID .. "_" .. i .. ".png")
+        end
 
-        skillBtn_1 = cc.uiloader:seekNodeByTag(node, 2)
-        skillBtn_1:onButtonClicked(function(event)
-        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_2)
-        	-- display.getRunningScene().enemy.armature:setVisible(not display.getRunningScene().enemy.armature:isVisible())
-
-        	end)
-        :setButtonImage("normal", "icon/skill_"..subheroID .. "_2.png")
-        :setButtonImage("pressed", "icon/skill_"..subheroID .. "_2.png")        
-        :setButtonImage("disabled", "icon/skill_"..subheroID .. "_2.png")
-
-        skillBtn_1 = cc.uiloader:seekNodeByTag(node, 3)
-        skillBtn_1:onButtonClicked(function(event)
-        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_3)
-        	end)
-        :setButtonImage("normal", "icon/skill_"..subheroID .. "_3.png")
-        :setButtonImage("pressed", "icon/skill_"..subheroID .. "_3.png")        
-        :setButtonImage("disabled", "icon/skill_"..subheroID .. "_3.png")
-
-        skillBtn_1 = cc.uiloader:seekNodeByTag(node, 4)
-        skillBtn_1:onButtonClicked(function(event)
-        	Skill:UseSkill(display.getRunningScene().hero, heroInfo.Skill_4)
-        	end)
-        :setButtonImage("normal", "icon/skill_"..subheroID .. "_4.png")
-        :setButtonImage("pressed", "icon/skill_"..subheroID .. "_4.png")        
-        :setButtonImage("disabled", "icon/skill_"..subheroID .. "_4.png")
-
-        skillBtn_1 = cc.uiloader:seekNodeByTag(node, 5)
-        skillBtn_1:onButtonClicked(function(event)
+        local skillBtn = cc.uiloader:seekNodeByTag(node, 5)
+        skillBtn:onButtonClicked(function(event)
         	if (display.getRunningScene().hero.armature:getAnimation():getCurrentMovementID() ~= "attack") then
-        		display.getRunningScene().hero:doEvent("doAttack")
+        		local scene = display.getRunningScene()
+                local hero = scene.hero
+                hero:doEvent("doAttack")
         	end
         	end)
         :setButtonImage("normal", "icon/"..heroID .. ".png")
         :setButtonImage("pressed", "icon/"..heroID .. ".png")
         :setButtonImage("disabled", "icon/"..heroID .. ".png")
 
-        local progressBack = cc.uiloader:seekNodeByTag(node, 7)
-        node.progress = Progress.new("ui/hp_gray.png", "ui/hp_green.png")
-        node.progress:setScale(1.6)
-        node.progress:setPosition(progressBack:getPositionX(), progressBack:getPositionY())
-        node:addChild(node.progress)
-        progressBack:setVisible(false)
-        node.progress:setProgress(100)
+        node.powerBars = {}
+        for i = 1, 4 do
+            node.powerBars[i] = cc.uiloader:seekNodeByTag(node, i+10)
+        end
+
+        node.hpBar = cc.uiloader:seekNodeByTag(node, 6)
 
         return node
 
@@ -72,6 +57,31 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
 
 function SkillPanel:ctor()
     self:setLocalZOrder(10000)
+end
+
+-- 更新显示
+function SkillPanel:UpdateDisplay()
+    local hero = self.parent.hero
+    if not hero then
+        print("main hero is nil")
+        return
+    end
+
+    -- 同步主玩家血条
+    self.hpBar:setPercent(hero.progress:getProgress())
+
+    -- 更新能量条
+    for i = 1, 4 do
+        local value = hero.powers[i]/hero.maxPowers[i]*100
+        if value == 100 then
+            self.btns[i]:setColor(display.COLOR_WHITE)
+            self.btns[i]:setButtonEnabled(true)
+        else
+            self.btns[i]:setColor(cc.c3b(100, 100, 100))
+            self.btns[i]:setButtonEnabled(false)
+        end
+        self.powerBars[i]:setPercent(value)
+    end
 end
 
 return SkillPanel

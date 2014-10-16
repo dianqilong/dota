@@ -21,4 +21,8 @@ function Progress:setProgress(progress)
     self.fill:setPercentage(progress)
 end
 
+function Progress:getProgress()
+    return self.fill:getPercentage()
+end
+
 return Progress

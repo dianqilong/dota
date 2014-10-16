@@ -2,14 +2,7 @@
 local Hero = import("..roles.Hero")
 local SkillPanel = import("..ui.skillpanel")
 local dataManager = import("..datamanager.datamanager")
-local Enemy = import("..roles.enemy")
 local Skill = import("..module.Skill")
---local Enemy2 = import("..roles.Enemy2")
---local Progress = import("..ui.Progress")
---local Background = import("..ui.Background")
---local PauseLayer = import("..scenes.PauseLayer")
---local GameoverLayer = import("..scenes.GameoverLayer")
---local PhysicsManager = import("..scenes.PhysicsManager")
 
 local MainScene = class("MainScene", function()
     return display.newScene("MainScene")
@@ -32,17 +25,20 @@ function MainScene:initScene()
     local background = display.newSprite("image/background.png", display.cx, display.cy)
     self:addChild(background)
 
-    self.hero = Hero.new("hero_lion", 1)
-    if self.hero.armature then
-        self:addChild(self.hero.armature)
-    end
+    self.lefts = {}
+    self.rights = {}    
 
-    self.enemy = Hero.new("hero_lion", 2)
-    if self.enemy.armature then
-        self:addChild(self.enemy.armature)
-    end
+    self.hero = Hero.new("hero_lion", 1)
+    self.lefts[#self.lefts+1] = self.hero
+    self:addChild(self.hero)
+
+    local enemy = Hero.new("hero_lion", 2)
+
+    self.rights[#self.rights+1] = enemy
+    self:addChild(enemy)
 
     self.skillPanel = SkillPanel.new(self, "hero_lion")
+    self.skillPanel:UpdateDisplay()
 
     self:addTouchLayer()
 end
@@ -67,122 +63,10 @@ function MainScene:addTouchLayer()
     self:addChild(self.layerTouch, -5)
 end
 
-function MainScene:addRoles()
-
-    -- 鑳屾櫙
-    self.background = Background.new()-- display.newSprite("image/background.png", display.cx, display.cy)
-    self.background:setPosition(0, 0)
-    self:addChild(self.background)
-
-    -- 鐜╁
-    self.player = Player.new()
-    self.player:setPosition(display.left + self.player:getContentSize().width/2, display.cy)
-    self.player.body:setPosition(display.left + self.player:getContentSize().width/2, display.cy)
-    self:addChild(self.player)
-
-    self:addEnemys()
-
---    local world = PhysicsManager:getInstance()
---    self.worldDebug = world:createDebugNode()
---    self:addChild(self.worldDebug)
---    world:addCollisionScriptListener(handler(self, self.onCollision) ,
---        CollisionType.kCollisionTypePlayer, CollisionType.kCollisionTypeEnemy)
-
-end
-
-function MainScene:addEnemys()
-
-    -- 鏁屼汉1
-    self.enemy1 = Enemy1.new()
-    self.enemy1:setPosition(display.right - self.enemy1:getContentSize().width/2, display.cy)
-    self.enemy1.body:setPosition(display.right - self.enemy1:getContentSize().width/2, display.cy)
-    self:addChild(self.enemy1)
-
-    self.enemys[#self.enemys + 1] = self.enemy1
-
-    -- 鏁屼汉2
-    self.enemy2 = Enemy2.new()
-    self.enemy2:setPosition(display.right - self.enemy2:getContentSize().width/2 * 3, display.cy)
-    self.enemy2.body:setPosition(display.right - self.enemy2:getContentSize().width/2 * 3, display.cy)
-    self:addChild(self.enemy2)
-
-    self.enemys[#self.enemys + 1] = self.enemy2
-end
-
-function MainScene:onCollision(eventType, event)
-    print(eventType)
-    if eventType == 'begin' then
-        self.canAttack = true
-        local body1 = event:getBody1()
-        local body2 = event:getBody2()
-
-        if body1:getCollisionType() == CollisionType.kCollisionTypePlayer and body2 then
-            body2.isCanAttack = true
-        end
-        elseif eventType == 'separate' then
-            self.canAttack = false
-            local body1 = event:getBody1()
-            local body2 = event:getBody2()
-
-            if body1:getCollisionType() == CollisionType.kCollisionTypePlayer and body2 then
-                body2.isCanAttack = false
-            end
-        end
-    end
-
-    function MainScene:addUI()
-
-    -- 琛�閲�
-    self.progress = Progress.new("#player-progress-bg.png", "#player-progress-fill.png")
-    self.progress:setPosition(display.left + self.progress:getContentSize().width/2, display.top - self.progress:getContentSize().height/2)
-    self:addChild(self.progress, 10)
-
-    local itemPause = cc.ui.MenuItem:create({image="#pause1.png", imageSelected="#pause2.png",
-        tag=1, listener = function(tag) self:pause() end})
-
-    local itemGo = cc.ui.MenuItem:create({image="#go.png", tag = 2, listener = function(tag)
-        self:gotoNextLevel()
-        end})
-    display.align(itemGo, display.CENTER_RIGHT, 0, 0)
-    itemGo:setVisible(false)
-    itemGo:setPosition(display.right, display.cy)
-    self.menu = cc.ui.newMenu({itemPause, itemGo})
-    itemPause:setPosition(display.right-itemPause:getContentSize().width/2, display.top-itemPause:getContentSize().height/2)
-    self.menu:setPosition(0,0)
-    self:addChild(self.menu, 10)
-end
-
 function MainScene:pause()
     display.pause()
     local layer = PauseLayer.new()
     self:addChild(layer)
-end
-
-function MainScene:clickEnemy(enemy)
-    print("self.canAttack = " .. tostring(self.canAttack))
-    if self.canAttack then
-        if self.player:getState() ~= "attack" then
-            self.player:doEvent("clickEnemy")
-            print("enemy:canAttack " .. tostring(enemy:getCanAttack()))
-            if enemy:getCanAttack() and enemy:getState() ~= 'hit' then
-                enemy:doEvent("beHit", {attack = self.player.attack})
-            end
-        end
-    else
-        local x,y = enemy:getPosition()
-        self.player:walkTo({x=x, y=y})
-        if self.player:getState() ~= 'walk' then
-            self.player:doEvent("clickScreen")
-        end
-    end
-end
-
-function MainScene:removeEnemy(enemy)
-    for i, v in ipairs(self.enemys) do
-        if enemy == v then
-            table.remove(self.enemys, i)
-        end
-    end
 end
 
 -- 鏄剧ず杩涘叆涓嬩竴鍏崇殑鎸夐挳

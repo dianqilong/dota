@@ -71,10 +71,10 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 	local scene = display.getRunningScene()
 	scene:addChild(effect)
 	-- 调整特效位置和角度
-	effect:setLocalZOrder(master.armature:getLocalZOrder())
-	local masterPos = cc.p(master.armature:getPosition())
+	effect:setLocalZOrder(master:getLocalZOrder())
+	local masterPos = cc.p(master:getPosition())
 	masterPos.y = masterPos.y + 50
-	local targetPos = cc.p(target.armature:getPosition())
+	local targetPos = cc.p(target:getPosition())
 	targetPos.y = targetPos.y + 50
 	local distance = cc.pGetDistance(masterPos, targetPos)
 	effect:setScaleX(distance/effect:getContentSize().width)
@@ -91,6 +91,7 @@ end
 function Effect:PositionEffect(effectInfo, master, target)
 	-- 准备特效文件
 	ccs.ArmatureDataManager:getInstance():addArmatureFileInfo(effectInfo.ConfigName)
+
 	-- 创建特效，添加到场景
 	local effect = ccs.Armature:create(effectInfo.ArmatureName)
 
@@ -105,8 +106,16 @@ function Effect:PositionEffect(effectInfo, master, target)
 
 	local scene = display.getRunningScene()
 	scene:addChild(effect)
-	effect:setLocalZOrder(target.armature:getLocalZOrder())
-	effect:setPosition(target.armature:getPosition())
+	effect:setLocalZOrder(master:getLocalZOrder())
+	local targetPos = cc.p(master:getPosition())
+	local offset = 100
+
+	if master.armature:getScaleX() < 0 then
+		effect:setScaleX(-1)
+		offset = -100
+	end
+
+	effect:setPosition(targetPos.x+offset, targetPos.y)
 	effect:getAnimation():play(effectInfo.AnimationName)
 end
 
