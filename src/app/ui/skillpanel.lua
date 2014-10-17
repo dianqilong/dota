@@ -23,8 +23,7 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
             node.btns[i]:setColor(cc.c3b(100, 100, 100))
             node.btns[i]:onButtonClicked(function(event)
                 if hero.skillsReady[i] then
-                    hero:ReducePower(10000, i)
-                    Skill:UseSkill(hero, hero.skills[i])
+                    Skill:UseSkill(hero, i)
                 end
                 end)
             :setButtonImage("normal", "icon/skill_"..subheroID .. "_" .. i .. ".png")

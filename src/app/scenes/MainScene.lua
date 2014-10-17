@@ -29,6 +29,7 @@ function MainScene:initScene()
     self.rights = {}    
 
     self.hero = Hero.new("hero_lion", 1)
+    self.hero.IsUserAI = false
     self.lefts[#self.lefts+1] = self.hero
     self:addChild(self.hero)
 
@@ -47,7 +48,7 @@ function MainScene:addTouchLayer()
     local function onTouch(eventName, x, y)
         if eventName == "began" then
             self.hero:walkTo({x=x, y=y})
-            if self.hero:getState() ~= 'walk' then
+            if self.hero:getState() ~= 'walk' and self.hero:getState() ~= 'hit' then
                 self.hero:doEvent("doWalk", cc.p(x, y))
             end
         end

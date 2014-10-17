@@ -27,7 +27,7 @@ function Effect:createEffect(effectID, master, target, ...)
 		[4] = function(effectInfo, master, target) self:PositionEffect(effectInfo, master, target) end
 	}
 	-- 特效事件分发
-	local func = switch[tonumber(effectInfo.Type)]
+	local func = switch[effectInfo.Type]
 	if func then
 		func(effectInfo, master, target)
 	else
@@ -38,9 +38,10 @@ end
 
 -- 删除特效
 function Effect:removeEffect(effectID, master)
-	local key = master:getID() .."_" .. effectID;
+	local key = master:getID() .. effectID .. master.side;
 	local effect = DataManager.effect.effectList[key]
 	if effect == nil then
+		-- print(effectID .. " not exist")
 		return
 	end
 
@@ -56,7 +57,7 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 	-- 创建特效，添加到场景
 	local effect = ccs.Armature:create(effectInfo.ArmatureName)
 	-- 播放完成后自动删除
-	if tonumber(effectInfo.C_Remove) > 0 then
+	if effectInfo.C_Remove > 0 then
 		local function animationEvent(armatureBack,movementType,movementID)
 			if movementType == ccs.MovementEventType.complete then				
 				effect:removeSelf()
@@ -66,7 +67,7 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 		effect:getAnimation():setMovementEventCallFunc(animationEvent)
 	else
 		-- 记录特效到特效列表
-		DataManager.effect.effectList[master:getID() .."_" .. effectInfo.ID] = effect
+		DataManager.effect.effectList[master:getID() .. effectInfo.ID .. master.side] = effect
 	end
 	local scene = display.getRunningScene()
 	scene:addChild(effect)
@@ -78,7 +79,7 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 	targetPos.y = targetPos.y + 50
 	local distance = cc.pGetDistance(masterPos, targetPos)
 	effect:setScaleX(distance/effect:getContentSize().width)
-	if tonumber(effectInfo.ScaleY) ~= 0 then
+	if effectInfo.ScaleY ~= 0 then
 		effect:setScaleY(effectInfo.ScaleY)
 	end
 	local angle = cc.pToAngleSelf(cc.pSub(targetPos, masterPos))
