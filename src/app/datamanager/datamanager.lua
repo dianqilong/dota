@@ -15,6 +15,14 @@ function DataManager:ctor()
 
 	self.effect = Effect:new()
 	self.skill = Skill:new()
+	self.index = 0
+end
+
+-- 获取全局递增索引
+function DataManager:getIncIndex()
+	self.index = self.index + 1
+	print("u_index = " .. self.index)
+	return self.index
 end
 
 function DataManager:loadHeroConfig()

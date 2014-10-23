@@ -38,6 +38,7 @@ end
 -- 初始化英雄属性信息
 function Hero:initProp(heroConf)
     self.id = heroConf.ID
+    self.u_index = DataManager:getIncIndex()
     self.name = heroConf.Name
     self.attack = heroConf.Attack*5
     self.atkRange = heroConf.AtkRange
@@ -54,6 +55,7 @@ function Hero:initProp(heroConf)
     self.atktime = 0
     self.holdtime = 0
     self.IsUserAI = true
+    self.schedulers = {}
 end
 
 -- 初始化动画信息
@@ -68,10 +70,10 @@ function Hero:initArmature(heroConf)
     self.armature:setScaleY(0.5)
 
     if self.side == 1 then
-        self:setPosition(cc.p(display.left+self.armature:getBoundingBox().width/2, display.cy-80))
+        self:setPosition(cc.p(display.left-self.atkRange, display.cy+40))
     else
         self.armature:setScaleX(-0.5)
-        self:setPosition(cc.p(display.right-self.armature:getBoundingBox().width, display.cy-80))
+        self:setPosition(cc.p(display.right+self.atkRange, display.cy+40))
     end
 
     self.frameEventList = {}
@@ -100,7 +102,6 @@ function Hero:initArmature(heroConf)
             self.atktime = self.atktime - 0.1
         end
 
-
         -- 眩晕计时
         if self.holdtime > 0 then
             self.holdtime = self.holdtime - 0.1
@@ -109,7 +110,7 @@ function Hero:initArmature(heroConf)
             end
         end
     end
-    self.Timer = scheduler.scheduleGlobal(Timer, 0.1)
+    self.schedulers["Timer"] = scheduler.scheduleGlobal(Timer, 0.1)
 end
 
 -- 初始化头血条信息
@@ -130,6 +131,7 @@ function Hero:initHPBar()
     local barSize = self.progress:getContentSize()
     self.progress:setPosition(0, size.height)
     self.progress:setScale(0.8)
+    self.progress:setVisible(false)
 end
 
 -- 初始化AI
@@ -141,12 +143,29 @@ function Hero:initAI()
         self.AI:CatchEvent()
         self:setLocalZOrder(10000 - self:getPositionY())
     end
-    self.handle = scheduler.scheduleUpdateGlobal(updateAI)
+    self.schedulers["updateAI"] = scheduler.scheduleUpdateGlobal(updateAI)
 end
 
 -- 更新头顶血条显示
 function Hero:updateHpBar()
     self.progress:setProgress(self.hp/self.maxHp*100)
+
+    if self.schedulers["hideHpBar"] then
+        scheduler.unscheduleGlobal(self.schedulers["hideHpBar"])
+        self.schedulers["hideHpBar"] = nil
+    end
+
+    if self.hp == 0 then
+        self.progress:setVisible(false)
+    else
+        self.progress:setVisible(true)
+        
+        self.schedulers["hideHpBar"] = scheduler.performWithDelayGlobal(function()
+            self.progress:setVisible(false)
+            self.schedulers["hideHpBar"] = nil
+            end, 2)
+    end
+
     local skillPanel = display.getRunningScene().skillPanel
     skillPanel:UpdateDisplay()
 end
@@ -155,6 +174,10 @@ end
 
 function Hero:getID()
     return self.id
+end
+
+function Hero:getIndex()
+    return self.u_index
 end
 
 function Hero:IsDead()
@@ -223,6 +246,16 @@ end
 
 function Hero:DelFrameCallBack(eventName)
     self.frameEventList[eventName] = nil
+end
+
+-- 删除英雄
+function Hero:RemoveHero()
+    -- 淡出场景
+    local action = transition.sequence(
+        {cc.FadeOut:create(2), 
+        cc.CallFunc:create(function() self:removeSelf() end)})
+
+    self.armature:runAction(action)
 end
 
 ---------------------------------------------外部调用 切换状态机 ----------------------------------------
@@ -394,10 +427,24 @@ function Hero:hit()
 end
 
 function Hero:dead()
+    -- 删除计时器
+    for key, value in pairs(self.schedulers) do
+        scheduler.unscheduleGlobal(value)
+    end
+
+    -- 删除对象
+    table.remove(self.container, self.index)
+
     scheduler.performWithDelayGlobal(function()
-            self:doEvent("stop")
-            self:IncHp(self.maxHp)
-            end, 3)
+            self:RemoveHero()
+            end, 1)
+
+    if self.subs then
+        self.armature:setVisible(true)
+        self.subs:removeSelf()
+        self.subs = nil
+    end
+
     self.armature:getAnimation():play("death")
 end
 
@@ -422,7 +469,7 @@ function Hero:addStateMachine()
         {name = "doWalk", from = {"idle", "attack", "magic"},   to = "walk" },
         {name = "doAttack",  from = {"idle", "walk"},  to = "attack"},
         {name = "beKilled", from = {"idle", "walk", "attack", "hit", "magic", "hold"},  to = "dead"},
-        {name = "beHit", from = {"idle", "walk", "attack"}, to = "hit"},
+        {name = "beHit", from = {"idle", "walk", "attack", "hold"}, to = "hit"},
         {name = "stop", from = {"walk", "attack", "hit", "magic", "dead", "hold"}, to = "idle"},
         {name = "doMagic", from = {"idle", "walk"}, to = "magic"},
         {name = "beHold", from = {"idle", "walk", "attack", "hit", "magic"}, to = "hold"},

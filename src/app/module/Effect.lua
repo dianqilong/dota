@@ -38,7 +38,7 @@ end
 
 -- 删除特效
 function Effect:removeEffect(effectID, master)
-	local key = master:getID() .. effectID .. master.side;
+	local key = master:getIndex() .. effectID;
 	local effect = DataManager.effect.effectList[key]
 	if effect == nil then
 		-- print(effectID .. " not exist")
@@ -67,7 +67,7 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 		effect:getAnimation():setMovementEventCallFunc(animationEvent)
 	else
 		-- 记录特效到特效列表
-		DataManager.effect.effectList[master:getID() .. effectInfo.ID .. master.side] = effect
+		DataManager.effect.effectList[master:getIndex() .. effectInfo.ID] = effect
 	end
 	local scene = display.getRunningScene()
 	scene:addChild(effect)

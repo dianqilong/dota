@@ -37,7 +37,7 @@ function AI:CatchEvent(eventName)
 						master:DoAttack()
 					end
 				else
-					master:WalkTo(cc.p(target:getPosition()))
+					master:WalkTo(cc.p(target:getPositionX(), master:getPositionY()))
 				end
 			end
 		end

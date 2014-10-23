@@ -134,8 +134,8 @@ function Skill:GetSufferer(skillinfo, master, type)
 
 		local target = targets[1]
 		local masterPos = cc.p(master:getPosition())
-		local minDistance = cc.pGetDistance(masterPos, cc.p(target:getPosition()))
-		for i = 2, #targets do
+		local minDistance = 10000
+		for i = 1, #targets do
 			if not targets[i]:IsDead() then
 				local distance = cc.pGetDistance(masterPos, cc.p(targets[i]:getPosition()))
 				if distance < minDistance then
@@ -222,6 +222,11 @@ function Skill:s_stealmp(skillinfo, master)
 
 		-- 计算伤害
 		local function stealPower()
+			--目标死亡，不处理
+			if enemy:IsDead() then
+				master:doEvent("stop")
+				return
+			end
 			master.stealPowerTimer = master.stealPowerTimer + 0.5
 			if master.stealPowerTimer > skillinfo.DurationTime then
 				master:doEvent("stop")
@@ -278,6 +283,10 @@ function Skill:s_puncture(skillinfo, master)
 			local delay = math.floor(distance/(skillinfo.EffSpring/3))
 
 			local function doEffect()
+				--目标死亡，不处理
+				if enemys[i]:IsDead() then
+					return
+				end
 				enemys[i]:Hold(skillinfo.DurationTime)
 				local moveAction = cc.JumpTo:create(0.7, enemyPos, 100, 1)
 				enemys[i]:runAction(moveAction)
@@ -319,6 +328,10 @@ function Skill:s_sheep(skillinfo, master)
         master.armature:setScaleX(0.5)
     end
 	local function onDamage()
+		--目标死亡，不处理
+		if enemy:IsDead() then
+			return
+		end
 		master:DelFrameCallBack("onDamageEvent")
 		local scene = display.getRunningScene()
 		
@@ -329,24 +342,34 @@ function Skill:s_sheep(skillinfo, master)
 		local pos = cc.p(enemy.armature:getPosition())
 
 		-- 显示绵羊
-		enemy.sheep = display.newSprite("image/sheep.png", pos.x, pos.y)
-		enemy.sheep:setScale(0.4)
-		if enemy.side == 1 then
-			enemy.sheep:setScaleX(-0.4)
+		if enemy.subs then
+			enemy.subs:removeSelf()
+			enemy.subs = nil
 		end
-		enemy:addChild(enemy.sheep)
+
+		enemy.subs = display.newSprite("image/sheep.png", pos.x, pos.y)
+		enemy.subs:setScale(0.4)
+		if enemy.side == 1 then
+			enemy.subs:setScaleX(-0.4)
+		end
+		enemy:addChild(enemy.subs)
 		enemy:Hold(skillinfo.DurationTime)
 
 		local function skillEnd()
+			enemy.schedulers["sheepTimer"] = nil
 			enemy.armature:setVisible(true)
-			if enemy.sheep then
-				enemy.sheep:removeSelf()
-				enemy.sheep = nil
+			if enemy.subs then
+				enemy.subs:removeSelf()
+				enemy.subs = nil
 			end
 		end
 
 		if skillinfo.DurationTime and skillinfo.DurationTime > 0 then
-			enemy.sheepTimer = scheduler.performWithDelayGlobal(skillEnd, skillinfo.DurationTime)
+			if enemy.schedulers["sheepTimer"] then
+				scheduler.unscheduleGlobal(enemy.schedulers["sheepTimer"])
+				enemy.schedulers["sheepTimer"] = nil
+			end
+			enemy.schedulers["sheepTimer"] = scheduler.performWithDelayGlobal(skillEnd, skillinfo.DurationTime)
 		end
 	end
 

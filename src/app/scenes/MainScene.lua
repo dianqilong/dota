@@ -3,6 +3,7 @@ local Hero = import("..roles.Hero")
 local SkillPanel = import("..ui.skillpanel")
 local dataManager = import("..datamanager.datamanager")
 local Skill = import("..module.Skill")
+local scheduler = require("framework.scheduler")
 
 local MainScene = class("MainScene", function()
     return display.newScene("MainScene")
@@ -25,23 +26,79 @@ function MainScene:initScene()
     local background = display.newSprite("image/background.png", display.cx, display.cy)
     self:addChild(background)
 
-    self.lefts = {}
-    self.rights = {}    
+    -- 地图可行走范围
+    self.map_top = 360
+    self.map_bottom = 160
+    self.map_space = (self.map_top - self.map_bottom)/5
 
+    self.lefts = {}
+    self.rights = {}
+
+    -- 主玩家
     self.hero = Hero.new("hero_lion", 1)
     self.hero.IsUserAI = false
     self.lefts[#self.lefts+1] = self.hero
+    self.hero.index = #self.lefts
+    self.hero.container = self.lefts
+    self.hero:setPositionY(self.map_top)
     self:addChild(self.hero)
 
-    local enemy = Hero.new("hero_lion", 2)
+    -- 友军AI
+    self:addTeam()
 
-    self.rights[#self.rights+1] = enemy
-    self:addChild(enemy)
+    -- 敌军AI
+    self:addEnemy()
 
     self.skillPanel = SkillPanel.new(self, "hero_lion")
     self.skillPanel:UpdateDisplay()
 
-    self:addTouchLayer()
+    -- self:addTouchLayer()
+end
+
+function MainScene:addTeam()
+    -- function addObj()
+    --     local team = Hero.new("hero_lion", 1)
+    --     self.lefts[#self.lefts+1] = team
+    --     team.index = #self.lefts
+    --     team.container = self.lefts
+    --     self:addChild(team)
+    --     if #self.lefts < 5 then
+    --         self:addTeam()
+    --     end
+    -- end
+    -- scheduler.performWithDelayGlobal(addObj, 0.5)
+
+    for i = 1, 4 do
+        local team = Hero.new("hero_lion", 1)
+        team:setPositionY(self.map_top-self.map_space*#self.lefts)
+        self.lefts[#self.lefts+1] = team
+        team.index = #self.lefts
+        team.container = self.lefts
+        self:addChild(team)
+    end
+end
+
+function MainScene:addEnemy()
+    -- function addObj()
+    --     local enemy = Hero.new("hero_lion", 2)
+    --     self.rights[#self.rights+1] = enemy
+    --     enemy.index = #self.rights
+    --     enemy.container = self.rights
+    --     self:addChild(enemy)
+    --     if #self.rights < 5 then
+    --         self:addEnemy()
+    --     end
+    -- end
+    -- scheduler.performWithDelayGlobal(addObj, 0.5)
+
+    for i = 1, 5 do
+        local enemy = Hero.new("hero_lion", 2)
+        enemy:setPositionY(self.map_top-self.map_space*#self.rights)
+        self.rights[#self.rights+1] = enemy
+        enemy.index = #self.rights
+        enemy.container = self.rights
+        self:addChild(enemy)
+    end
 end
 
 function MainScene:addTouchLayer()
@@ -70,14 +127,12 @@ function MainScene:pause()
     self:addChild(layer)
 end
 
--- 鏄剧ず杩涘叆涓嬩竴鍏崇殑鎸夐挳
 function MainScene:showNextLevelItem()
     local goItem = self.menu:getChildByTag(2)
     goItem:setVisible(true)
     goItem:runAction(CCRepeatForever:create(CCBlink:create(1, 1)))
 end
 
--- 杩涘叆涓嬩竴鍏�
 function MainScene:gotoNextLevel()
     local goItem = self.menu:getChildByTag(2)
     transition.stopTarget(goItem)
@@ -86,7 +141,6 @@ function MainScene:gotoNextLevel()
     self.background:move("left", self.player)
 end
 
--- 杩涘叆鍏冲崱
 function MainScene:enterLevel(level)
     self.level = level
     self:addUI()
@@ -95,10 +149,8 @@ end
 
 function MainScene:enemyDead(enemy)
     print("EnemyDead")
-    -- 妫�娴嬫晫浜烘槸鍚﹀凡缁忔病琛�浜�
     self:removeEnemy(enemy)
 
-    -- 濡傛灉鏁屼汉鍏ㄩ儴鎸備簡
     if #self.enemys == 0 then
         self:showNextLevelItem()
     end
