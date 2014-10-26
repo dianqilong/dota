@@ -6,15 +6,16 @@ local Skill = import("..module.Skill")
 local Progress = import("..ui.Progress")
 local Effect = import("..module.Effect")
 
-local SkillPanel = class("SkillPanel", function(parent, heroID)
+local SkillPanel = class("SkillPanel", function(scene)
+        local hero = scene.hero
+        local heroID = hero:getID()
         -- 获取英雄技能信息
         local subheroID = string.split(heroID, '_')[2]
         local heroInfo = DataManager:getHeroConf(heroID)
 
         local node = cc.uiloader:load("ui/SkillPanelUI/SkillPanelUI_1.json")
-        node.parent = parent
-        parent:addChild(node)
-        local hero = parent.hero
+        node.hero = hero
+        scene:addChild(node)
 
         node.btns = {}
         -- 初始化技能图标
@@ -34,8 +35,6 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
         local skillBtn = cc.uiloader:seekNodeByTag(node, 5)
         skillBtn:onButtonClicked(function(event)
         	if (display.getRunningScene().hero.armature:getAnimation():getCurrentMovementID() ~= "attack") then
-        		local scene = display.getRunningScene()
-                local hero = scene.hero
                 hero:doEvent("doAttack")
         	end
         	end)
@@ -46,6 +45,9 @@ local SkillPanel = class("SkillPanel", function(parent, heroID)
         node.powerBars = {}
         for i = 1, 4 do
             node.powerBars[i] = cc.uiloader:seekNodeByTag(node, i+10)
+            if hero.maxPowers[i] == 0 then
+                node.powerBars[i]:setVisible(false)
+            end
         end
 
         node.hpBar = cc.uiloader:seekNodeByTag(node, 6)
@@ -60,9 +62,8 @@ end
 
 -- 更新显示
 function SkillPanel:UpdateDisplay()
-    local hero = self.parent.hero
+    local hero = self.hero
     if not hero then
-        print("main hero is nil")
         return
     end
 
@@ -71,15 +72,17 @@ function SkillPanel:UpdateDisplay()
 
     -- 更新能量条
     for i = 1, 4 do
-        local value = hero.powers[i]/hero.maxPowers[i]*100
-        if value == 100 then
-            self.btns[i]:setColor(display.COLOR_WHITE)
-            self.btns[i]:setButtonEnabled(true)
-        else
-            self.btns[i]:setColor(cc.c3b(100, 100, 100))
-            self.btns[i]:setButtonEnabled(false)
+        if hero.maxPowers[i] > 0 then
+            local value = hero.powers[i]/hero.maxPowers[i]*100
+            if value == 100 then
+                self.btns[i]:setColor(display.COLOR_WHITE)
+                self.btns[i]:setButtonEnabled(true)
+            else
+                self.btns[i]:setColor(cc.c3b(100, 100, 100))
+                self.btns[i]:setButtonEnabled(false)
+            end
+            self.powerBars[i]:setPercent(value)
         end
-        self.powerBars[i]:setPercent(value)
     end
 end
 

@@ -14,26 +14,30 @@ function Effect:createEffect(effectID, master, target, ...)
 	local effectInfo = DataManager:getEffectConf(effectID)
 	if effectInfo == nil then
 		print("effect config not exit")
-		return
+		return nil
 	end
 
 	local switch = {
-		[1] = function(effectInfo, master, target) self:ptpLineEffect(effectInfo, master, target) end,
+		[1] = function(effectInfo, master, target) return self:ptpLineEffect(effectInfo, master, target) end,
 
-		[2] = function(...) self:ptpLineEffect(unpack(...)) end,
+		[2] = function(...) return self:ptpLineEffect(unpack(...)) end,
 
-		[3] = function(...) self:ptpLineEffect(unpack(...)) end,
+		[3] = function(...) return self:ptpLineEffect(unpack(...)) end,
 
-		[4] = function(effectInfo, master, target) self:PositionEffect(effectInfo, master, target) end
+		[4] = function(effectInfo, master, target) return self:PositionEffect(effectInfo, master, target) end,
+
+		[5] = function(effectInfo, master, target) return self:BuffEffect(effectInfo, master, target) end
 	}
 	-- 特效事件分发
 	local func = switch[effectInfo.Type]
 	if func then
-		func(effectInfo, master, target)
+		return func(effectInfo, master, target)
 	else
 		print("no Effect function")
-		return
+		return nil
 	end
+
+	return nil
 end
 
 -- 删除特效
@@ -86,6 +90,8 @@ function Effect:ptpLineEffect(effectInfo, master, target, ...)
 	effect:setPosition(cc.pMidpoint(masterPos, targetPos))
 	effect:setRotation(-math.deg(angle))
 	effect:getAnimation():play(effectInfo.AnimationName)
+
+	return effect
 end
 
 -- 指定位置的特效
@@ -107,7 +113,7 @@ function Effect:PositionEffect(effectInfo, master, target)
 
 	local scene = display.getRunningScene()
 	scene:addChild(effect)
-	effect:setLocalZOrder(master:getLocalZOrder())
+	effect:setLocalZOrder(master:getLocalZOrder()-1)
 	local targetPos = cc.p(master:getPosition())
 	local offset = 100
 
@@ -116,8 +122,32 @@ function Effect:PositionEffect(effectInfo, master, target)
 		offset = -100
 	end
 
-	effect:setPosition(targetPos.x+offset, targetPos.y)
+	effect:setPosition(targetPos.x + offset, targetPos.y)
 	effect:getAnimation():play(effectInfo.AnimationName)
+
+	return effect
+end
+
+-- buff特效
+function Effect:BuffEffect(effectInfo, master, target)
+	self:removeEffect(effectInfo.ID, target)
+	-- 准备特效文件
+	ccs.ArmatureDataManager:getInstance():addArmatureFileInfo(effectInfo.ConfigName)
+
+	-- 创建特效，添加到对象
+	local effect = ccs.Armature:create(effectInfo.ArmatureName)
+	target:addChild(effect)
+
+	local size = target.armature:getContentSize()
+    size.width = size.width * math.abs(target.armature:getScaleX())
+    size.height = size.height * math.abs(target.armature:getScaleY())
+    
+    effect:setPosition(0, size.height)
+    effect:getAnimation():play(effectInfo.AnimationName)
+	-- 记录特效到特效列表
+	DataManager.effect.effectList[target:getIndex() .. effectInfo.ID] = effect
+
+	return effect
 end
 
 return Effect

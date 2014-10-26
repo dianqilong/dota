@@ -22,6 +22,9 @@ function Hero:ctor(heroID, side)
     -- 初始化属性信息
     self:initProp(heroConf)
 
+    -- 初始化技能信息
+    self:initSkill(heroConf)
+
     -- 初始化动画信息
     self:initArmature(heroConf)
 
@@ -39,12 +42,51 @@ end
 function Hero:initProp(heroConf)
     self.id = heroConf.ID
     self.u_index = DataManager:getIncIndex()
+    self.IsPlayer = false
     self.name = heroConf.Name
-    self.attack = heroConf.Attack*5
+
+    -- 英雄类型
+    self.type = heroConf.Type
+
+    -- 力量，敏捷，智力
+    self.str = heroConf.Str
+    self.agi = heroConf.Agi
+    self.int = heroConf.Int
+
+    -- 记录技能和装备增加的属性
+    self.addstr = 0
+    self.addagi = 0
+    self.addint = 0
+    self.addattack = 0
+
+    self.baseatk = heroConf.Attack
+    -- 攻击力 = 基础攻击力+主属性转换（每点主属性加5点攻击力）+其他加成（装备和技能）
+    self.attack = self.baseatk + self[self.type]*5 + self.addattack
+
+    self.atkType = heroConf.AtkType
+    self.atkSprite = heroConf.AtkSprite
     self.atkRange = heroConf.AtkRange
     self.atkSpeed = heroConf.AtkSpeed
-    self.hp = heroConf.HP
-    self.maxHp = heroConf.HP
+    self.maxHp = heroConf.HP + self.str*5
+    self.hp = self.maxHp
+
+    self.atktime = 0    -- 攻击间隔计时
+    self.holdtime = 0   -- 控制时间计时
+    self.IsUseAI = true -- 是否AI控制
+    self.schedulers = {}-- 计时器集合
+    self.buffs = {}     -- buff集合
+    self.customcallbacks = {} -- 回调函数集合
+end
+
+-- 更新属性
+function Hero:UpdateProp()
+    -- 攻击力 = 基础攻击力+主属性转换（每点主属性加5点攻击力）+其他加成（装备和技能）
+    local mainProp = self[self.type] + self["add"..self.type]
+    self.attack = self.baseatk + mainProp*5 + self.addattack
+end
+
+-- 初始化技能信息
+function Hero:initSkill(heroConf)
     self.skills = {heroConf.Skill_1, heroConf.Skill_2, heroConf.Skill_3, heroConf.Skill_4}
     self.powers = {0,0,0,0}
     self.maxPowers = {Skill:getNeedPower(heroConf.Skill_1),
@@ -52,10 +94,13 @@ function Hero:initProp(heroConf)
                         Skill:getNeedPower(heroConf.Skill_3),
                         Skill:getNeedPower(heroConf.Skill_4)}
     self.skillsReady = {false,false,false,false}
-    self.atktime = 0
-    self.holdtime = 0
-    self.IsUserAI = true
-    self.schedulers = {}
+
+    -- 使用被动技能
+    for i = 1, #self.skills do
+        if Skill:getSkillType(self.skills[i]) == 0 then
+            Skill:UseSkill(self, i)
+        end
+    end
 end
 
 -- 初始化动画信息
@@ -76,13 +121,9 @@ function Hero:initArmature(heroConf)
         self:setPosition(cc.p(display.right+self.atkRange, display.cy+40))
     end
 
-    self.frameEventList = {}
-
     -- 注册帧回调
     local function onFrameEvent(bone,evt,originFrameIndex,currentFrameIndex)
-        if self.frameEventList[evt] then
-            self.frameEventList[evt]()
-        end
+        self:DoCallBack(evt)
     end
     self.armature:getAnimation():setFrameEventCallFunc(onFrameEvent)
 
@@ -128,8 +169,7 @@ function Hero:initHPBar()
     size.height = size.height * math.abs(self.armature:getScaleY())
     self:addChild(self.progress)
 
-    local barSize = self.progress:getContentSize()
-    self.progress:setPosition(0, size.height)
+    self.progress:setPosition(0, size.height+20)
     self.progress:setScale(0.8)
     self.progress:setVisible(false)
 end
@@ -166,8 +206,10 @@ function Hero:updateHpBar()
             end, 2)
     end
 
-    local skillPanel = display.getRunningScene().skillPanel
-    skillPanel:UpdateDisplay()
+    if self.IsPlayer then
+        local skillPanel = display.getRunningScene().skillPanel
+        skillPanel:UpdateDisplay()
+    end
 end
 
 ---------------------------------------- 外部属性操作 --------------------------------------------------
@@ -184,6 +226,13 @@ function Hero:IsDead()
     return self:getState() == "dead"
 end
 
+-- 获取攻击数值
+function Hero:GetAttack()
+    math.randomseed(os.time()+self.u_index*100000)
+    local scale = math.random(50)/100+0.7  -- 0.8-1.2 的随机数
+    return math.ceil(self.attack * scale)
+end
+
 -- 增加血量
 function Hero:IncHp(num)
     self.hp = self.hp + num
@@ -194,27 +243,47 @@ function Hero:IncHp(num)
 end
 
 -- 减少血量
-function Hero:ReduceHp(num)
+function Hero:ReduceHp(num, attacker)
     self.hp = self.hp - num
     if self.hp <= 0 then
         self.hp = 0
         self:doEvent("beKilled")
     end
     self:updateHpBar()
+    if attacker then
+        self:UpdateBuffs("ReduceHp", num, attacker)
+    end
+end
+
+-- 增加属性值
+function Hero:IncProp(prop, num)
+    self[prop] = self[prop] + num
+    self:UpdateProp()
+end
+
+-- 减少属性值
+function Hero:ReduceProp(prop, num)
+    self[prop] = self[prop] - num
+    if self[prop] <= 0 then
+        self[prop] = 0
+    end
+    self:UpdateProp()
 end
 
 -- 增加能量
 function Hero:IncPower(num)
     for i = 1, #self.powers do
         self.powers[i] = self.powers[i] + num
-        if self.powers[i] >= self.maxPowers[i] then
+        if self.maxPowers[i] > 0 and self.powers[i] >= self.maxPowers[i] then
             self.powers[i] = self.maxPowers[i]
             -- 技能准备完毕
             self.skillsReady[i] = true
         end
     end
-    local skillPanel = display.getRunningScene().skillPanel
-    skillPanel:UpdateDisplay()
+    if self.IsPlayer then
+        local skillPanel = display.getRunningScene().skillPanel
+        skillPanel:UpdateDisplay()
+    end
 end
 
 -- 减少能量
@@ -230,7 +299,9 @@ function Hero:ReducePower(num, index)
     if self.powers[index] < 0 then
         self.powers[index] = 0
     end
-    local skillPanel = display.getRunningScene().skillPanel:UpdateDisplay()
+    if self.IsPlayer then
+        display.getRunningScene().skillPanel:UpdateDisplay()
+    end
 end
 
 -- 减少所有槽位能量
@@ -240,12 +311,41 @@ function Hero:ReducePowerAll(num)
     end
 end
 
-function Hero:AddFrameCallBack(eventName, func)
-    self.frameEventList[eventName] = func
+function Hero:AddCallBack(event, func)
+    if not self.customcallbacks[event] then
+        self.customcallbacks[event] = {}
+    else
+        self:DelCallBack(event, func)
+    end
+    self.customcallbacks[event][#self.customcallbacks[event]+1] = func
 end
 
-function Hero:DelFrameCallBack(eventName)
-    self.frameEventList[eventName] = nil
+function Hero:DelCallBack(event, func)
+    if not self.customcallbacks[event] then
+        return
+    end
+    for key, value in pairs(self.customcallbacks[event]) do
+        if value == func then
+            table.remove(self.customcallbacks[event], key)
+            return
+        end
+    end
+end
+
+-- 执行自定义回调
+function Hero:DoCallBack(event, ...)
+    if self.customcallbacks[event] then
+        for key, value in pairs(self.customcallbacks[event]) do
+            value(...)
+        end
+    end
+end
+
+-- 刷新buff
+function Hero:UpdateBuffs(type, ...)
+    for key, value in pairs(self.buffs) do
+        value:UpdateBuff(type, ...)
+    end
 end
 
 -- 删除英雄
@@ -309,6 +409,7 @@ end
 
 function Hero:EndHold()
     if self:getState() == "hold" then
+        Effect:removeEffect("e_stun", self)
         self:doEvent("stop")
     end
 end
@@ -359,6 +460,29 @@ function Hero:walkTo(pos, callback)
     return true
 end
 
+-- 远程攻击
+function farAttack(self, target)
+    local starPos = self.armature:convertToWorldSpace(cc.p(self.armature:getBone("atkpoint"):getPosition()))
+    local targetPos = cc.p(target:getPosition())
+    self.atkeff = display.newSprite(self.atkSprite, starPos.x, starPos.y)
+    display.getRunningScene():addChild(self.atkeff)
+    self.atkeff:setLocalZOrder(self:getLocalZOrder())
+    local angle = cc.pToAngleSelf(cc.pSub(targetPos, starPos))
+    self.atkeff:setRotation(-math.deg(angle))
+    local distance = cc.pGetDistance(starPos, targetPos)
+    local action = transition.sequence(
+        {cc.MoveTo:create(distance / display.width, targetPos), 
+        cc.CallFunc:create(function()
+            if target.hp > 0 then
+                target:ReduceHp(self:GetAttack(), self)
+                self:IncPower(40)
+            end
+            self.atkeff:removeSelf()
+            self.atkeff=nil
+            end)})
+    self.atkeff:runAction(action)
+end
+
 function Hero:doAttack()
     local target = Skill:GetSufferer(nil, self, "closest")
     if not target then
@@ -376,30 +500,22 @@ function Hero:doAttack()
     self.armature:getAnimation():play("attack")
 
     local function normalattack()
-        self:DelFrameCallBack("onDamageEvent")
-        local starPos = self.armature:convertToWorldSpace(cc.p(self.armature:getBone("atkpoint"):getPosition()))
-        local targetPos = cc.p(target:getPosition())
-        self.atkeff = display.newSprite("effect/eff_atk.png", starPos.x, starPos.y)
-        display.getRunningScene():addChild(self.atkeff)
-        self.atkeff:setLocalZOrder(self:getLocalZOrder())
-        local angle = cc.pToAngleSelf(cc.pSub(targetPos, starPos))
-        self.atkeff:setRotation(-math.deg(angle))
-        local distance = cc.pGetDistance(starPos, targetPos)
-        local action = transition.sequence(
-            {cc.MoveTo:create(distance / display.width, targetPos), 
-            cc.CallFunc:create(function()
-                if target.hp > 0 then
-                    target:ReduceHp(self.attack)
-                    self:IncPower(40)
-                end
-                self.atkeff:removeSelf()
-                self.atkeff=nil
-                end)})
-        self.atkeff:runAction(action)
+        self:DelCallBack("onDamageEvent", normalattack)
+
+        -- 近战
+        if self.atkType == 1 then
+            if target.hp > 0 then
+                target:ReduceHp(self:GetAttack(), self)
+                self:IncPower(40)
+            end
+        else -- 远程
+            farAttack(self, target)
+        end
+
         self.atktime = 1--self.atkSpeed
     end
 
-    self:AddFrameCallBack("onDamageEvent", normalattack)
+    self:AddCallBack("onDamageEvent", normalattack)
 end
 
 function Hero:magic(circul)
@@ -415,6 +531,7 @@ function Hero:leavemagic()
 end
 
 function Hero:hold()
+    Effect:createEffect("e_stun", self, self)
     self.armature:getAnimation():play("loading")
 end
 
@@ -433,7 +550,12 @@ function Hero:dead()
     end
 
     -- 删除对象
-    table.remove(self.container, self.index)
+    for i = 1, #self.container do
+        if self.container[i].u_index == self.u_index then
+            table.remove(self.container, i)
+            break
+        end
+    end
 
     scheduler.performWithDelayGlobal(function()
             self:RemoveHero()

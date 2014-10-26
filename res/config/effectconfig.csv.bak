@@ -3,3 +3,5 @@ ID,ConfigName,ArmatureName,AnimationName,Type,ScaleX,ScaleY,C_Remove
 e_red_light,effect/redLightAnimation.ExportJson,redLightAnimation,deathfinger,1,0,0,1
 e_blue_light,effect/blueLightAnimation.ExportJson,blueLightAnimation,stealmp,1,0,0.5,0
 e_puncture,effect/puncture/e_puncture.ExportJson,e_puncture,puncture,4,0,0,1
+e_stun,effect/eff_stun/eff_stun.ExportJson,eff_stun,stun,5,0,0,0
+e_hoofstomp,effect/hoofstomp_1/hoofstomp_1.ExportJson,hoofstomp_1,hoofstomp_1,4,0,0,1

@@ -6,7 +6,7 @@ local Skill = import("..module.Skill")
 local scheduler = require("framework.scheduler")
 
 local MainScene = class("MainScene", function()
-    return display.newScene("MainScene")
+    return display.newScene("MainScedne")
     end)
 
 function MainScene:ctor()
@@ -22,6 +22,11 @@ end
 
 -- 初始化场景
 function MainScene:initScene()
+    -- if true then
+    --     math.randomseed(os.time())
+    --     print(math.random(50)/100+0.7)
+    --     return
+    -- end
     -- 背景
     local background = display.newSprite("image/background.png", display.cx, display.cy)
     self:addChild(background)
@@ -36,12 +41,14 @@ function MainScene:initScene()
 
     -- 主玩家
     self.hero = Hero.new("hero_lion", 1)
-    self.hero.IsUserAI = false
+    self.hero.IsUseAI = false
     self.lefts[#self.lefts+1] = self.hero
-    self.hero.index = #self.lefts
+    self.hero.IsPlayer = true
     self.hero.container = self.lefts
     self.hero:setPositionY(self.map_top)
+    -- self.hero:setPositionX(500)
     self:addChild(self.hero)
+    -- self.hero.hp = 1000
 
     -- 友军AI
     self:addTeam()
@@ -49,7 +56,7 @@ function MainScene:initScene()
     -- 敌军AI
     self:addEnemy()
 
-    self.skillPanel = SkillPanel.new(self, "hero_lion")
+    self.skillPanel = SkillPanel.new(self)
     self.skillPanel:UpdateDisplay()
 
     -- self:addTouchLayer()
@@ -69,10 +76,14 @@ function MainScene:addTeam()
     -- scheduler.performWithDelayGlobal(addObj, 0.5)
 
     for i = 1, 4 do
-        local team = Hero.new("hero_lion", 1)
+        local team
+        if i == 2 or i == 3 then
+            team = Hero.new("hero_CW", 1)
+        else
+            team = Hero.new("hero_lion", 1)
+        end
         team:setPositionY(self.map_top-self.map_space*#self.lefts)
         self.lefts[#self.lefts+1] = team
-        team.index = #self.lefts
         team.container = self.lefts
         self:addChild(team)
     end
@@ -92,10 +103,14 @@ function MainScene:addEnemy()
     -- scheduler.performWithDelayGlobal(addObj, 0.5)
 
     for i = 1, 5 do
-        local enemy = Hero.new("hero_lion", 2)
+        local enemy
+        if i == 2 or i == 4 then
+            enemy = Hero.new("hero_CW", 2)
+        else
+            enemy = Hero.new("hero_lion", 2)
+        end
         enemy:setPositionY(self.map_top-self.map_space*#self.rights)
         self.rights[#self.rights+1] = enemy
-        enemy.index = #self.rights
         enemy.container = self.rights
         self:addChild(enemy)
     end

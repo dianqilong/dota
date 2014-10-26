@@ -1,0 +1,4 @@
+ID,Type,Trigger,Prop,Value,DurationTime,ExecFunc
+唯一标示,类型,触发器,影响属性,影响数值,持续时间,执行函数
+buff_return,,4,,,,
+buff_fortitude,,1,str,30,,add_prop

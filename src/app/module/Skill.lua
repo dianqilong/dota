@@ -20,14 +20,16 @@ function Skill:UseSkill(master, index)
 		return
 	end
 
-	self.index = index
+	self.power_index = index
 
 	local switch = {
+		[0] = function(info, m) self:PassiveSkill(info, m) end,
+
 		[1] = function(info, m) self:PointSkill(info, m) end,
 
 		[2] = function(info, m) self:ptpLineEffect(info, m) end,
 
-		[3] = function(info, m) self:ptpLineEffect(info, m) end,
+		[3] = function(info, m) self:circular_aoe(info, m) end,
 
 		[4] = function(info, m) self:ptpLineEffect(info, m) end
 	}
@@ -37,7 +39,6 @@ function Skill:UseSkill(master, index)
 	if func then
 		func(skillInfo, master)
 	elseif self[skillID] then
-		local func = self[skillID]
 		self[skillID](self, skillInfo, master)
 	else
 		print("no Skill function")
@@ -69,6 +70,16 @@ function Skill:EndSkill(master)
 	master.curSkill = nil
 end
 
+-- 获取技能类型
+function Skill:getSkillType(skillID)
+	return DataManager:getSkillConf(skillID).Type
+end
+
+-- 获取技能能量消耗
+function Skill:getNeedPower(skillID)
+	return DataManager:getSkillConf(skillID).Power
+end
+
 -- 获取敌方阵营活着的单位
 local function getAnemys(master)
 	if master.side == 1 then
@@ -81,21 +92,23 @@ end
 -- 选取受影响敌人
 function Skill:GetSufferer(skillinfo, master, type)
 	if type == "line" then--施法者前方线行范围
-		local effWidth = skillinfo.EffWidth
-		local effSpring = skillinfo.EffSpring
+		local effWidth = skillinfo.EffWidth*3
+		local effSpring = skillinfo.EffSpring*3
+		local castDistance = skillinfo.CastDistance
 		local suffererList = {}
 		local masterPos = cc.p(master:getPosition())
-		for key, enemy in pairs(getAnemys(master)) do
-			if not enemy:IsDead() then
-				local enemyPos = cc.p(enemy:getPosition())
+		local enemys = getAnemys(master)
+		for i = 1, #enemys do
+			if not enemys[i]:IsDead() then
+				local enemyPos = cc.p(enemys[i]:getPosition())
 				if math.abs(masterPos.y - enemyPos.y) < effWidth then
 					if master.armature:getScaleX() < 0 then
-						if masterPos.x > enemyPos.x and masterPos.x - effSpring < enemyPos.x then
-							suffererList[#suffererList+1] = enemy
+						if masterPos.x > enemyPos.x and masterPos.x - (effSpring/2+castDistance) < enemyPos.x then
+							suffererList[#suffererList+1] = enemys[i]
 						end
 					else
-						if masterPos.x < enemyPos.x and masterPos.x + effSpring > enemyPos.x then
-							suffererList[#suffererList+1] = enemy
+						if masterPos.x < enemyPos.x and masterPos.x + (effSpring/2+castDistance) > enemyPos.x then
+							suffererList[#suffererList+1] = enemys[i]
 						end
 					end
 				end
@@ -117,6 +130,7 @@ function Skill:GetSufferer(skillinfo, master, type)
 				local distance = cc.pGetDistance(masterPos, targetPos)
 				if distance < minDistance then
 					target = targets[i]
+					minDistance = distance
 				end
 			end
 		end
@@ -140,12 +154,21 @@ function Skill:GetSufferer(skillinfo, master, type)
 				local distance = cc.pGetDistance(masterPos, cc.p(targets[i]:getPosition()))
 				if distance < minDistance then
 					target = targets[i]
+					minDistance = distance
 				end
 			end
 		end
 		return target
 	end
 	return nil
+end
+
+-- 被动技能
+function Skill:PassiveSkill(skillinfo, master)
+	-- 添加buff
+	if skillinfo.AddBuff then
+		Buff:AddBuff(master, skillinfo.AddBuff)
+	end
 end
 
 -- 单体技能
@@ -156,7 +179,7 @@ function Skill:PointSkill(skillinfo, master)
 		return
 	end
 
-	master:ReducePower(10000, self.index)
+	master:ReducePower(10000, self.power_index)
 	master.atktime = 2
 
 	--调整朝向
@@ -166,7 +189,7 @@ function Skill:PointSkill(skillinfo, master)
         master.armature:setScaleX(0.5)
     end
 	local function onPointSkillDamage()
-		master:DelFrameCallBack("onDamageEvent")
+		master:DelCallBack("onDamageEvent", onPointSkillDamage)
 		local scene = display.getRunningScene()
 
 		-- 添加buff
@@ -176,7 +199,7 @@ function Skill:PointSkill(skillinfo, master)
 
 		-- 计算伤害
 		if skillinfo.EffProp then
-			enemy:ReduceHp(skillinfo.Damage)
+			enemy:ReduceHp(skillinfo.Damage, master)
 		end
 
 		-- 播放特效
@@ -186,10 +209,65 @@ function Skill:PointSkill(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddFrameCallBack("onDamageEvent", onPointSkillDamage)
+		master:AddCallBack("onDamageEvent", onPointSkillDamage)
 		master:DoMagic()
 	else
 		onPointSkillDamage()
+	end
+end
+
+-- 根据技能施法距离获取特效位置偏移量
+function getEffectOffset(skillinfo, master)
+	if skillinfo.CastDistance == 0 then
+		return 0
+	end
+
+	-- 左方阵营
+	if master.side == 1 then
+		return skillinfo.CastDistance
+	else
+		return -skillinfo.CastDistance
+	end
+
+	return 0
+end
+
+-- 圆形AOE
+function Skill:circular_aoe(skillinfo, master)
+	master:ReducePower(10000, self.power_index)
+	master.atktime = 2
+
+	local function onDamage()
+		master:DelCallBack("onDamageEvent", onDamage)
+
+		-- 添加buff
+		if skillinfo.AddBuff then
+			Buff:AddBuff(master, skillinfo.AddBuff)
+		end
+
+		-- 播放特效
+		if skillinfo.Effect then
+			local effect = Effect:createEffect(skillinfo.Effect, master)
+			if effect then
+				effect:setPosition(master:getPositionX() + getEffectOffset(skillinfo, master), master:getPositionY())
+			end
+		end
+
+		-- 获取受影响敌人
+		local enemys = self:GetSufferer(skillinfo, master, "line")
+		for i = 1, #enemys do
+			enemys[i]:ReduceHp(skillinfo.Damage, master)
+			if not enemys[i]:IsDead() and skillinfo.DurationTime > 0 then
+				enemys[i]:Hold(skillinfo.DurationTime)
+			end
+		end
+	end
+
+	if skillinfo.PreAction then
+		master:AddCallBack("onDamageEvent", onDamage)
+		master:DoMagic()
+	else
+		onDamage()
 	end
 end
 
@@ -201,7 +279,7 @@ function Skill:s_stealmp(skillinfo, master)
 		return
 	end
 
-	master:ReducePower(10000, self.index)
+	master:ReducePower(10000, self.power_index)
 	master.atktime = 2
 
 	--调整朝向
@@ -212,7 +290,7 @@ function Skill:s_stealmp(skillinfo, master)
 	end
 
 	local function onDamage()
-		master:DelFrameCallBack("onDamageEvent")
+		master:DelCallBack("onDamageEvent", onDamage)
 		local scene = display.getRunningScene()
 
 		-- 添加buff
@@ -250,7 +328,7 @@ function Skill:s_stealmp(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddFrameCallBack("onDamageEvent", onDamage)
+		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic(1)
 	else
 		onDamage()
@@ -261,15 +339,12 @@ end
 function Skill:s_puncture(skillinfo, master)
 	-- 获取距离最近的敌人
 	local enemys = self:GetSufferer(skillinfo, master, "line")
-	if #enemys == 0 then
-		return
-	end
 
-	master:ReducePower(10000, self.index)
+	master:ReducePower(10000, self.power_index)
 	master.atktime = 2
 
 	local function onDamage()
-		master:DelFrameCallBack("onDamageEvent")
+		master:DelCallBack("onDamageEvent", onDamage)
 		local scene = display.getRunningScene()
 		-- 播放特效
 		if skillinfo.Effect and string.len(skillinfo.Effect) > 0 then
@@ -292,7 +367,7 @@ function Skill:s_puncture(skillinfo, master)
 				enemys[i]:runAction(moveAction)
 				-- 计算伤害
 				if skillinfo.EffProp then
-					enemys[i]:ReduceHp(skillinfo.Damage)
+					enemys[i]:ReduceHp(skillinfo.Damage, master)
 				end
 			end
 
@@ -305,7 +380,7 @@ function Skill:s_puncture(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddFrameCallBack("onDamageEvent", onDamage)
+		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic()
 	else
 		onDamage()
@@ -319,7 +394,7 @@ function Skill:s_sheep(skillinfo, master)
 	if not enemy then
 		return
 	end
-	master:ReducePower(10000, self.index)
+	master:ReducePower(10000, self.power_index)
 	master.atktime = 2
 	--调整朝向
     if master:getPositionX() > enemy:getPositionX() then
@@ -328,11 +403,11 @@ function Skill:s_sheep(skillinfo, master)
         master.armature:setScaleX(0.5)
     end
 	local function onDamage()
+		master:DelCallBack("onDamageEvent", onDamage)
 		--目标死亡，不处理
 		if enemy:IsDead() then
 			return
 		end
-		master:DelFrameCallBack("onDamageEvent")
 		local scene = display.getRunningScene()
 		
 		-- 隐藏本体
@@ -374,16 +449,11 @@ function Skill:s_sheep(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddFrameCallBack("onDamageEvent", onDamage)
+		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic()
 	else
 		onDamage()
 	end
-end
-
--- 获取技能能量消耗
-function Skill:getNeedPower(skillID)
-	return DataManager:getSkillConf(skillID).Power
 end
 
 return Skill

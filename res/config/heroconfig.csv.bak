@@ -1,3 +1,4 @@
-ID,Name,Attack,HP,AtkRange,AtkSpeed,Skill_1,Skill_2,Skill_3,Skill_4,Armature
-唯一标示,显示名称,攻击力,血量,攻击距离,攻击速度,技能一,技能二,技能三,技能四,动画
-hero_lion,恶魔巫师,20,500,300,5,s_puncture,s_sheep,s_stealmp,s_deathfinger,Hero
+ID,Name,Type,Str,Agi,Int,Attack,HP,AtkType,AtkRange,AtkSpeed,Skill_1,Skill_2,Skill_3,Skill_4,Armature,AtkSprite
+唯一标示,显示名称,英雄类型,力量,敏捷,智力,攻击力,血量,攻击类型,攻击距离,攻击速度,技能一,技能二,技能三,技能四,动画,子弹
+hero_lion,恶魔巫师,int,10,10,20,20,500,2,300,5,s_puncture,s_sheep,s_stealmp,s_deathfinger,Hero,effect/eff_atk.png
+hero_CW,半人马酋长,str,20,10,10,30,700,1,80,3,s_hoofstomp,s_doubleedge,s_return,s_fortitude,Hero,

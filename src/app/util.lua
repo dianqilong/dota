@@ -32,3 +32,25 @@ function loadCsvFile(filePath)
 	end
 	return arrs;
 end
+
+-- 判断值是否存在
+function KeyExist(t, k)
+	for key, value in pairs(t) do
+		if key == k then
+			return true
+		end
+	end
+
+	return false
+end
+
+-- 判断值是否存在
+function ValueExist(t, v)
+	for key, value in pairs(t) do
+		if value == v then
+			return true
+		end
+	end
+
+	return false
+end

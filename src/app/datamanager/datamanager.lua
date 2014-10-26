@@ -12,6 +12,7 @@ function DataManager:ctor()
 	self:loadHeroConfig()
 	self:loadSkillConfig()
 	self:loadEffectConfig()
+	self:loadBuffConfig()
 
 	self.effect = Effect:new()
 	self.skill = Skill:new()
@@ -40,6 +41,11 @@ function DataManager:loadEffectConfig()
 	self.effectconfig = loadCsvFile(path)
 end
 
+function DataManager:loadBuffConfig()
+	local path = cc.FileUtils:getInstance():fullPathForFilename("config/buffconfig.csv")
+	self.buffconfig = loadCsvFile(path)
+end
+
 function DataManager:getHeroConf(heroID)
 	return self.heroconfig[heroID]
 end
@@ -50,6 +56,10 @@ end
 
 function DataManager:getSkillConf(skillID)
 	return self.skillconfig[skillID]
+end
+
+function DataManager:getBuffConf(buffID)
+	return self.buffconfig[buffID]
 end
 
 return DataManager
