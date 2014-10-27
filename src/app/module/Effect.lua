@@ -150,4 +150,25 @@ function Effect:BuffEffect(effectInfo, master, target)
 	return effect
 end
 
+-- 头顶飘字
+function Effect:HeadFlyText(master, content)
+	local label = cc.ui.UILabel.new({
+		UILabelType = 1, 
+		text = -content, 
+		font = "font/red_digits.fnt",
+		align = cc.ui.UILabel.TEXT_ALIGN_CENTER})	
+	label:setAnchorPoint(cc.p(0.5, 0.5))
+	label:setScale(0.1)
+	display.getRunningScene():addChild(label)
+
+	label:setPosition(cc.p(master:getPositionX(), master:getPositionY() + 150))
+	label:setLocalZOrder(master:getLocalZOrder())
+
+	local action = transition.sequence(
+		{cc.ScaleTo:create(0.2, 0.8),
+		cc.MoveTo:create(1, cc.p(label:getPositionX(), label:getPositionY() + 80)),
+		cc.CallFunc:create(function() label:removeSelf() end)})
+	label:runAction(action)
+end
+
 return Effect

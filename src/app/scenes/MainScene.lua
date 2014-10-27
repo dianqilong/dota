@@ -40,7 +40,7 @@ function MainScene:initScene()
     self.rights = {}
 
     -- 主玩家
-    self.hero = Hero.new("hero_lion", 1)
+    self.hero = Hero.new("hero_CW", 1)
     self.hero.IsUseAI = false
     self.lefts[#self.lefts+1] = self.hero
     self.hero.IsPlayer = true

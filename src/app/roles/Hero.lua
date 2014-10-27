@@ -67,7 +67,7 @@ function Hero:initProp(heroConf)
     self.atkSprite = heroConf.AtkSprite
     self.atkRange = heroConf.AtkRange
     self.atkSpeed = heroConf.AtkSpeed
-    self.maxHp = heroConf.HP + self.str*5
+    self.maxHp = heroConf.HP + self.str*50
     self.hp = self.maxHp
 
     self.atktime = 0    -- 攻击间隔计时
@@ -244,6 +244,7 @@ end
 
 -- 减少血量
 function Hero:ReduceHp(num, attacker)
+    num = math.floor(num)
     self.hp = self.hp - num
     if self.hp <= 0 then
         self.hp = 0
@@ -253,6 +254,9 @@ function Hero:ReduceHp(num, attacker)
     if attacker then
         self:UpdateBuffs("ReduceHp", num, attacker)
     end
+
+    -- 头顶飘字
+    Effect:HeadFlyText(self, num)
 end
 
 -- 增加属性值
@@ -402,6 +406,9 @@ function Hero:Hold(time)
             self.holdtime = time
         end
     else
+        if self:getState() ~= 'idle' then
+            self:doEvent("stop")
+        end
         self:doEvent("beHold")
         self.holdtime = time
     end
@@ -423,6 +430,9 @@ function Hero:idle()
     end
     self.armature:getAnimation():playWithIndex(0)
     self.armature:getAnimation():setSpeedScale(0.8)
+
+    -- 动作被打断后清空所有帧回调
+    self.customcallbacks["onDamageEvent"] = {}
 end
 
 function Hero:walkTo(pos, callback)
@@ -502,6 +512,11 @@ function Hero:doAttack()
     local function normalattack()
         self:DelCallBack("onDamageEvent", normalattack)
 
+        if target:IsDead() then
+            self:Stop()
+            return
+        end
+
         -- 近战
         if self.atkType == 1 then
             if target.hp > 0 then
@@ -544,6 +559,7 @@ function Hero:hit()
 end
 
 function Hero:dead()
+    Effect:removeEffect("e_stun", self)
     -- 删除计时器
     for key, value in pairs(self.schedulers) do
         scheduler.unscheduleGlobal(value)
@@ -612,4 +628,3 @@ function Hero:addStateMachine()
 end
 
 return Hero
-
