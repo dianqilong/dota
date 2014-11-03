@@ -1,4 +1,13 @@
-ID,Type,Trigger,Prop,Value,DurationTime,ExecFunc
-å”¯ä¸€æ ‡ç¤º,ç±»å‹,è§¦å‘å™¨,å½±å“å±æ€§,å½±å“æ•°å€¼,æŒç»­æ—¶é—´,æ‰§è¡Œå‡½æ•°
-buff_return,,4,,,,
-buff_fortitude,,1,str,30,,add_prop
+ID,Name,Type,Trigger,EffSpring,EffWidth,Prop,Value,DurationTime,ExecFunc,Interval
+Î¨Ò»±êÊ¾,Ãû³Æ,ÀàĞÍ,´¥·¢Æ÷,Ó°Ïì·¶Î§,Ó°Ïì¿í¶È,Ó°ÏìÊôĞÔ,Ó°ÏìÊıÖµ,³ÖĞøÊ±¼ä,Ö´ĞĞº¯Êı,´¥·¢¼ä¸ô
+buff_return,·´ÉË,,4,,,,,,,
+buff_fortitude,¸ÕÒã²»Çü,,1,,,str,30,,add_prop,
+buff_healingward,ÖÎÁÆÊØÎÀ,,5,800,500,,30,,aoe_add_hp,1
+buff_addcrit,½£Îè,,1,,,crit_rate,50,,add_prop,
+buff_stop_2,Ñ£ÔÎ2Ãë,,1,0,0,,,2,stop,
+buff_stop_3,Ñ£ÔÎ3Ãë,,1,0,0,,,3,stop,
+buff_stop_5,Ñ£ÔÎ5Ãë,,1,0,0,,,5,stop,
+buff_jump_2,»÷·ÉºóÑ£ÔÎ2Á½Ãë,,1,0,0,,,2,do_jump,
+buff_jump_3,»÷·ÉºóÑ£ÔÎ3Á½Ãë,,1,0,0,,,3,do_jump,
+buff_sheep,±äÑò,,1,0,0,,,5,sheep,
+buff_freeze_2,¶³½áÁ½Ãë,,1,0,0,,,2,freeze,

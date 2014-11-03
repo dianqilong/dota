@@ -5,3 +5,6 @@ e_blue_light,effect/blueLightAnimation.ExportJson,blueLightAnimation,stealmp,1,0
 e_puncture,effect/puncture/e_puncture.ExportJson,e_puncture,puncture,4,0,0,1
 e_stun,effect/eff_stun/eff_stun.ExportJson,eff_stun,stun,5,0,0,0
 e_hoofstomp,effect/hoofstomp_1/hoofstomp_1.ExportJson,hoofstomp_1,hoofstomp_1,4,0,0,1
+e_healingward,effect/ward/ward.ExportJson,ward,idle,5,0,0,0
+e_gush,effect/gush/gush.ExportJson,gush,gush,2,0,0,0
+e_ravage,effect/ravage/ravage.ExportJson,ravage,ravage,4,0,0,1

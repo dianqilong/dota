@@ -1,7 +1,7 @@
-
 local Progress = import("..ui.Progress")
 local scheduler = require("framework.scheduler")
 local Effect = import("..module.Effect")
+local Buff = import("..module.Buff")
 local Skill = import("..module.Skill")
 local AI = import("..module.AI")
 
@@ -22,9 +22,6 @@ function Hero:ctor(heroID, side)
     -- 初始化属性信息
     self:initProp(heroConf)
 
-    -- 初始化技能信息
-    self:initSkill(heroConf)
-
     -- 初始化动画信息
     self:initArmature(heroConf)
 
@@ -33,6 +30,9 @@ function Hero:ctor(heroID, side)
 
     -- 初始化状态机
     self:addStateMachine()
+
+    -- 初始化技能信息
+    self:initSkill(heroConf)
 
     -- 初始化AI
     self:initAI()
@@ -53,22 +53,33 @@ function Hero:initProp(heroConf)
     self.agi = heroConf.Agi
     self.int = heroConf.Int
 
-    -- 记录技能和装备增加的属性
+    -- 记录增加的属性
     self.addstr = 0
     self.addagi = 0
     self.addint = 0
     self.addattack = 0
 
+    -- 基础攻击力
     self.baseatk = heroConf.Attack
     -- 攻击力 = 基础攻击力+主属性转换（每点主属性加5点攻击力）+其他加成（装备和技能）
     self.attack = self.baseatk + self[self.type]*5 + self.addattack
 
     self.atkType = heroConf.AtkType
     self.atkSprite = heroConf.AtkSprite
-    self.atkRange = heroConf.AtkRange
+
+    -- 暴击率
+    self.crit_rate = 0
+
+    math.randomseed(os.time()+self.u_index*100000)
+    local scale = math.random(50)/100 + 1  -- 0.8-1.2 的随机数
+
+    self.atkRange = heroConf.AtkRange*scale
     self.atkSpeed = heroConf.AtkSpeed
     self.maxHp = heroConf.HP + self.str*50
     self.hp = self.maxHp
+
+    -- 是否能被选中
+    self.canBeSelect = true
 
     self.atktime = 0    -- 攻击间隔计时
     self.holdtime = 0   -- 控制时间计时
@@ -111,13 +122,11 @@ function Hero:initArmature(heroConf)
 
     self:addChild(self.armature)
 
-    self.armature:setScaleX(0.5)
-    self.armature:setScaleY(0.5)
+    self.armature:setScale(0.6)
 
     if self.side == 1 then
         self:setPosition(cc.p(display.left-self.atkRange, display.cy+40))
     else
-        self.armature:setScaleX(-0.5)
         self:setPosition(cc.p(display.right+self.atkRange, display.cy+40))
     end
 
@@ -130,9 +139,11 @@ function Hero:initArmature(heroConf)
     -- 注册动画回调
     local function animationEvent(armatureBack,movementType,movementID)
         if movementType == ccs.MovementEventType.complete and 
-            (movementID == "attack" or movementID == "smitten") then
-            self:doEvent("stop")
+            (movementID == "attack" or movementID == "smitten" or movementID == "skill4") then
+            self:Stop()
         end
+        
+        self:DoCallBack("AnimationEvent", movementID, movementType)
     end
     self.armature:getAnimation():setMovementEventCallFunc(animationEvent)
 
@@ -146,9 +157,6 @@ function Hero:initArmature(heroConf)
         -- 眩晕计时
         if self.holdtime > 0 then
             self.holdtime = self.holdtime - 0.1
-            if self.holdtime <= 0 then
-                self:EndHold()
-            end
         end
     end
     self.schedulers["Timer"] = scheduler.scheduleGlobal(Timer, 0.1)
@@ -226,11 +234,42 @@ function Hero:IsDead()
     return self:getState() == "dead"
 end
 
+function Hero:IsHold()
+    return self:getState() == "hold"
+end
+
+-- 是否暴击
+function Hero:IsCrit()
+    math.randomseed(os.time()+self.u_index*100000)
+    local num = math.random(10000)/100
+    return num < self.crit_rate
+end
+
+-- 是否能被选中
+function Hero:CanBeSelect()
+    return self.canBeSelect
+end
+
+-- 设置能否被选中
+function Hero:SetCanBeSelect(value)
+    self.canBeSelect = value
+end
+
 -- 获取攻击数值
 function Hero:GetAttack()
     math.randomseed(os.time()+self.u_index*100000)
     local scale = math.random(50)/100+0.7  -- 0.8-1.2 的随机数
     return math.ceil(self.attack * scale)
+end
+
+-- 重置攻击时间
+function Hero:CheckAtkCD()
+    return self.atktime <= 0
+end
+
+-- 重置攻击时间
+function Hero:ResetAtkTime()
+    self.atktime = self.atkSpeed
 end
 
 -- 增加血量
@@ -239,11 +278,24 @@ function Hero:IncHp(num)
     if self.hp > self.maxHp then
         self.hp = self.maxHp
     end
-    self:updateHpBar()
+    
+    if self:CanBeSelect() then
+        self:updateHpBar()
+        -- 头顶飘字
+        Effect:HeadFlyText(self, "+" .. num, "green_digits")
+    end
 end
 
 -- 减少血量
 function Hero:ReduceHp(num, attacker)
+    if self:getState() == "dead" or not self:CanBeSelect() then
+        return
+    end
+    local isCrit = false
+    if attacker and attacker:IsCrit() then
+        isCrit = true
+        num = num*2
+    end
     num = math.floor(num)
     self.hp = self.hp - num
     if self.hp <= 0 then
@@ -256,7 +308,7 @@ function Hero:ReduceHp(num, attacker)
     end
 
     -- 头顶飘字
-    Effect:HeadFlyText(self, num)
+    Effect:HeadFlyText(self, "-" .. num, "red_digits", isCrit)
 end
 
 -- 增加属性值
@@ -384,19 +436,19 @@ function Hero:DoAttack()
     self:doEvent("doAttack")
 end
 
-function Hero:DoMagic(circul)
+function Hero:DoMagic(action)
     if self:getState() ~= 'idle' then
         self:doEvent("stop")
     end
 
-    if not circul then
-        circul = -1
+    if not action then
+        action = "attack"
     end
 
-    self:doEvent("doMagic", circul)
+    self:doEvent("doMagic", action)
 end
 
-function Hero:Stop()
+function Hero:Stop()    
     self:doEvent("stop")
 end
 
@@ -416,7 +468,6 @@ end
 
 function Hero:EndHold()
     if self:getState() == "hold" then
-        Effect:removeEffect("e_stun", self)
         self:doEvent("stop")
     end
 end
@@ -451,11 +502,8 @@ function Hero:walkTo(pos, callback)
     local currentPos = cc.p(self:getPosition())
     local destPos = cc.p(pos.x, pos.y)
 
-    if pos.x < currentPos.x then
-        self.armature:setScaleX(-0.5)
-    else
-        self.armature:setScaleX(0.5)
-    end
+    -- 调整朝向
+    Skill:TurnFace(self, pos.x)
 
     local posDiff = cc.pGetDistance(currentPos, destPos)
     self.moveAction = transition.sequence(
@@ -472,16 +520,17 @@ end
 
 -- 远程攻击
 function farAttack(self, target)
-    local starPos = self.armature:convertToWorldSpace(cc.p(self.armature:getBone("atkpoint"):getPosition()))
-    local targetPos = cc.p(target:getPosition())
+    local starPos = self.armature:getBone("atkpoint"):getDisplayRenderNode():convertToWorldSpace(cc.p(0,0))
+    local targetPos = cc.p(target:getPositionX(), target:getPositionY()+50)
     self.atkeff = display.newSprite(self.atkSprite, starPos.x, starPos.y)
+    self.atkeff:setAnchorPoint(cc.p(0.5, 0.5))
     display.getRunningScene():addChild(self.atkeff)
     self.atkeff:setLocalZOrder(self:getLocalZOrder())
     local angle = cc.pToAngleSelf(cc.pSub(targetPos, starPos))
     self.atkeff:setRotation(-math.deg(angle))
     local distance = cc.pGetDistance(starPos, targetPos)
     local action = transition.sequence(
-        {cc.MoveTo:create(distance / display.width, targetPos), 
+        {cc.MoveTo:create(distance / display.width*2, targetPos), 
         cc.CallFunc:create(function()
             if target.hp > 0 then
                 target:ReduceHp(self:GetAttack(), self)
@@ -501,11 +550,7 @@ function Hero:doAttack()
     end
 
     --调整朝向
-    if self:getPositionX() > target:getPositionX() then
-        self.armature:setScaleX(-0.5)
-    else
-        self.armature:setScaleX(0.5)
-    end
+    Skill:TurnFace(self, target:getPositionX())
 
     self.armature:getAnimation():play("attack")
 
@@ -527,18 +572,14 @@ function Hero:doAttack()
             farAttack(self, target)
         end
 
-        self.atktime = 1--self.atkSpeed
+        self.atktime = self.atkSpeed
     end
 
     self:AddCallBack("onDamageEvent", normalattack)
 end
 
-function Hero:magic(circul)
-    if circul == 1 then
-        self.armature:getAnimation():play("attack2")
-    else
-        self.armature:getAnimation():play("attack")
-    end
+function Hero:magic(action)
+    self.armature:getAnimation():play(action)
 end
 
 function Hero:leavemagic()
@@ -546,7 +587,6 @@ function Hero:leavemagic()
 end
 
 function Hero:hold()
-    Effect:createEffect("e_stun", self, self)
     self.armature:getAnimation():play("loading")
 end
 
@@ -559,11 +599,19 @@ function Hero:hit()
 end
 
 function Hero:dead()
-    Effect:removeEffect("e_stun", self)
+    -- 停止移动
+    if self.moveAction then
+        self:stopAction(self.moveAction)
+        self.moveAction = nil
+    end
+
     -- 删除计时器
     for key, value in pairs(self.schedulers) do
         scheduler.unscheduleGlobal(value)
     end
+
+    -- 删除所有buff
+    Buff:ClearAllBuff(self)
 
     -- 删除对象
     for i = 1, #self.container do

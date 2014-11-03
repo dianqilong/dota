@@ -19,27 +19,29 @@ function AI:CatchEvent(eventName)
 	local master = self.master
 	local state = master:getState()
 	if state == "idle" then
-		-- 尝试释放技能
-		local index = self:getReadySkill()
-		if not master.IsUseAI then
-			index = nil
+		local target = Skill:GetSufferer(nil, master, "closest")
+		if not target then
+			return
 		end
-		if index then
-			if master.atktime <= 0 then
-				Skill:UseSkill(master, index)
+
+		-- 判断攻击范围
+		local distance = math.abs(master:getPositionX() - target:getPositionX())
+		if distance <= master.atkRange then
+			-- 尝试释放技能
+			local index = self:getReadySkill()
+			if not master.IsUseAI then
+				index = nil
 			end
-		else -- 尝试普通攻击
-			local target = Skill:GetSufferer(nil, master, "closest")
-			if target then
-				local distance = math.abs(master:getPositionX() - target:getPositionX())
-				if distance <= master.atkRange then
-					if master.atktime <= 0 then
-						master:DoAttack()
-					end
+
+			if master:CheckAtkCD() then
+				if index and Skill:CanUseSkill(master, index) then
+					Skill:UseSkill(master, index)
 				else
-					master:WalkTo(cc.p(target:getPositionX(), master:getPositionY()))
+					master:DoAttack()
 				end
 			end
+		else
+			master:WalkTo(cc.p(target:getPositionX(), master:getPositionY()))
 		end
 	elseif state == "walk" then
 		local target = Skill:GetSufferer(nil, master, "closest")

@@ -25,6 +25,8 @@ function loadCsvFile(filePath)
 	    	local num = tonumber(content[j])
 	    	if num then
 	    		arrs[content[1]][titles[j]] = num;
+	    	elseif content[j] == "" then
+	    		arrs[content[1]][titles[j]] = nil
 	    	else
 	    		arrs[content[1]][titles[j]] = content[j];
 	    	end
@@ -53,4 +55,10 @@ function ValueExist(t, v)
 	end
 
 	return false
+end
+
+-- 获取随机数
+function random(...)
+	math.randomseed(os.time())
+    return math.random(...)
 end

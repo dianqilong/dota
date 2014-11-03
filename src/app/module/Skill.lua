@@ -2,6 +2,7 @@
 -- Author: yjun
 -- Date: 2014-09-24 16:37:46
 --
+local Npc = import("..roles.Npc")
 local Buff = import("..module.Buff")
 local Effect = import("..module.Effect")
 local scheduler = require("framework.scheduler")
@@ -9,6 +10,28 @@ local scheduler = require("framework.scheduler")
 local Skill = class("Skill")
 
 function Skill:ctor()
+end
+
+-- 能否使用技能
+function Skill:CanUseSkill(master, index)
+	-- 死亡或眩晕状态
+	if master:IsHold() or master:IsDead() then
+		return false
+	end
+
+	local skillID = master.skills[index]
+	local skillInfo = DataManager:getSkillConf(skillID)
+	if skillInfo == nil then
+		return false
+	end
+
+	-- 没有目标
+	local target = Skill:GetSufferer(skillinfo, master, "closest")
+	if not target then
+		return false
+	end
+
+	return true
 end
 
 -- 使用技能
@@ -24,14 +47,10 @@ function Skill:UseSkill(master, index)
 
 	local switch = {
 		[0] = function(info, m) self:PassiveSkill(info, m) end,
-
 		[1] = function(info, m) self:PointSkill(info, m) end,
-
-		[2] = function(info, m) self:ptpLineEffect(info, m) end,
-
-		[3] = function(info, m) self:circular_aoe(info, m) end,
-
-		[4] = function(info, m) self:ptpLineEffect(info, m) end
+		[2] = function(info, m) self:AoeSkill(info, m) end,
+		[3] = function(info, m) self:CallNpc(info, m) end,
+		[4] = function(info, m) self:FlySkill(info, m) end,
 	}
 
 	-- 技能事件分发
@@ -61,7 +80,11 @@ function Skill:EndSkill(master)
 		return
 	end
 
-	Effect:removeEffect(skillInfo.Effect, master)
+	-- 持续性技能在结束时删除特效
+	if skillInfo.Effect and skillInfo.DurationTime and skillInfo.DurationTime > 0 then
+		Effect:removeEffect(skillInfo.Effect, master)
+	end
+
 	if master.skillhandle then
 		scheduler.unscheduleGlobal(master.skillhandle)
 		master.skillhandle = nil
@@ -89,78 +112,74 @@ local function getAnemys(master)
 	end
 end
 
+function getTargetByDistance(master, type, targets)
+	local masterPos = cc.p(master:getPosition())
+	local targetDistance = 10000
+	if type == "farthest" then
+		targetDistance = 0
+	end
+	local target = nil
+	for i = 1, #targets do
+		if targets[i]:CanBeSelect() then
+			local distance = cc.pGetDistance(masterPos, cc.p(targets[i]:getPosition()))
+			if (type == "farthest" and distance > targetDistance) or
+				(type == "closest" and distance < targetDistance) then
+				target = targets[i]
+				targetDistance = distance
+			end
+		end
+	end
+	return target
+end
+
 -- 选取受影响敌人
 function Skill:GetSufferer(skillinfo, master, type)
-	if type == "line" then--施法者前方线行范围
-		local effWidth = skillinfo.EffWidth*3
-		local effSpring = skillinfo.EffSpring*3
-		local castDistance = skillinfo.CastDistance
-		local suffererList = {}
-		local masterPos = cc.p(master:getPosition())
-		local enemys = getAnemys(master)
-		for i = 1, #enemys do
-			if not enemys[i]:IsDead() then
-				local enemyPos = cc.p(enemys[i]:getPosition())
-				if math.abs(masterPos.y - enemyPos.y) < effWidth then
-					if master.armature:getScaleX() < 0 then
-						if masterPos.x > enemyPos.x and masterPos.x - (effSpring/2+castDistance) < enemyPos.x then
-							suffererList[#suffererList+1] = enemys[i]
-						end
-					else
-						if masterPos.x < enemyPos.x and masterPos.x + (effSpring/2+castDistance) > enemyPos.x then
-							suffererList[#suffererList+1] = enemys[i]
-						end
-					end
-				end
-			end
-		end
-		return suffererList
-	elseif type == "atkrange" then -- 攻击范围内最近的敌方单位
-		local targets = getAnemys(master)
-		if #targets == 0 then
-			return nil
-		end
-
-		local target = nil
-		local masterPos = cc.p(master:getPosition())
-		local minDistance = master.atkRange
-		for i = 1, #targets do
-			if not targets[i]:IsDead() then
-				local targetPos = cc.p(targets[i]:getPosition())
-				local distance = cc.pGetDistance(masterPos, targetPos)
-				if distance < minDistance then
-					target = targets[i]
-					minDistance = distance
-				end
-			end
-		end
-		return target	
-	elseif type == "closest" then -- 最近的敌方单位
-		local targets = getAnemys(master)
-		if #targets == 0 then
-			return nil
-		elseif #targets == 1 then
-			if targets[1]:IsDead() then
-				return nil
-			end
-			return targets[1]
-		end
-
-		local target = targets[1]
-		local masterPos = cc.p(master:getPosition())
-		local minDistance = 10000
-		for i = 1, #targets do
-			if not targets[i]:IsDead() then
-				local distance = cc.pGetDistance(masterPos, cc.p(targets[i]:getPosition()))
-				if distance < minDistance then
-					target = targets[i]
-					minDistance = distance
-				end
-			end
-		end
-		return target
+	local targets = getAnemys(master)
+	if #targets == 0 then
+		return nil
 	end
-	return nil
+
+	target = nil
+
+	if type == "line" then--施法者前方线行范围
+		local castDistance = skillinfo.CastDistance
+		local masterPos = cc.p(master:getPosition())
+		-- 判断朝向
+		if master.armature:getScaleX() < 0 then
+			castDistance = -castDistance		
+		end
+
+		-- 确定范围
+		local rect = cc.rect(masterPos.x-skillinfo.EffSpring/2+castDistance, 
+							masterPos.y-skillinfo.EffWidth/2, 
+							skillinfo.EffSpring, 
+							skillinfo.EffWidth)
+		-- 记录范围内目标
+		target = {}
+		for i = 1, #targets do
+			if targets[i]:CanBeSelect() and 
+				cc.rectContainsPoint(rect, cc.p(targets[i]:getPosition())) then
+				target[#target+1] = targets[i]
+			end
+		end
+	elseif type == "closest" or type == "farthest" then -- 最近或最远的敌方单位
+		target = getTargetByDistance(master, type, targets)
+	elseif type == "random" then -- 随机敌方单位
+		if targets[random(1, #targets)]:CanBeSelect() then
+			target = targets[random(1, #targets)]
+		end
+	end
+
+	return target
+end
+
+-- 调整朝向，面向敌人
+function Skill:TurnFace(master, posX)
+	local scale = master.armature:getScaleX()
+	if (master:getPositionX() > posX and scale > 0) or 
+		(master:getPositionX() < posX and scale < 0) then
+		master.armature:setScaleX(-scale)
+	end
 end
 
 -- 被动技能
@@ -180,21 +199,22 @@ function Skill:PointSkill(skillinfo, master)
 	end
 
 	master:ReducePower(10000, self.power_index)
-	master.atktime = 2
+	master:ResetAtkTime()
 
 	--调整朝向
-    if master:getPositionX() > enemy:getPositionX() then
-        master.armature:setScaleX(-0.5)
-    else
-        master.armature:setScaleX(0.5)
-    end
+    Skill:TurnFace(master, enemy:getPositionX())
+
 	local function onPointSkillDamage()
 		master:DelCallBack("onDamageEvent", onPointSkillDamage)
-		local scene = display.getRunningScene()
+
+		--目标死亡，不处理
+		if enemy:IsDead() or not enemy:CanBeSelect() then
+			return
+		end
 
 		-- 添加buff
 		if skillinfo.AddBuff then
-			Buff:AddBuff(master, skillinfo.AddBuff)
+			Buff:AddBuff(enemy, skillinfo.AddBuff)
 		end
 
 		-- 计算伤害
@@ -209,8 +229,8 @@ function Skill:PointSkill(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddCallBack("onDamageEvent", onPointSkillDamage)
 		master:DoMagic()
+		master:AddCallBack("onDamageEvent", onPointSkillDamage)
 	else
 		onPointSkillDamage()
 	end
@@ -232,40 +252,37 @@ function getEffectOffset(skillinfo, master)
 	return 0
 end
 
--- 圆形AOE
-function Skill:circular_aoe(skillinfo, master)
+-- AOE
+function Skill:AoeSkill(skillinfo, master)
 	master:ReducePower(10000, self.power_index)
-	master.atktime = 2
+	master:ResetAtkTime()
 
 	local function onDamage()
 		master:DelCallBack("onDamageEvent", onDamage)
 
-		-- 添加buff
-		if skillinfo.AddBuff then
-			Buff:AddBuff(master, skillinfo.AddBuff)
-		end
-
 		-- 播放特效
 		if skillinfo.Effect then
-			local effect = Effect:createEffect(skillinfo.Effect, master)
+			local effect = Effect:createEffect(skillinfo.Effect, master, master)
 			if effect then
 				effect:setPosition(master:getPositionX() + getEffectOffset(skillinfo, master), master:getPositionY())
 			end
 		end
 
 		-- 获取受影响敌人
-		local enemys = self:GetSufferer(skillinfo, master, "line")
+		local enemys = self:GetSufferer(skillinfo, master, "line") or {}
 		for i = 1, #enemys do
-			enemys[i]:ReduceHp(skillinfo.Damage, master)
-			if not enemys[i]:IsDead() and skillinfo.DurationTime > 0 then
-				enemys[i]:Hold(skillinfo.DurationTime)
+			-- 添加buff
+			if skillinfo.AddBuff then
+				Buff:AddBuff(enemys[i], skillinfo.AddBuff)
 			end
+
+			enemys[i]:ReduceHp(skillinfo.Damage, master)			
 		end
 	end
 
 	if skillinfo.PreAction then
-		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic()
+		master:AddCallBack("onDamageEvent", onDamage)
 	else
 		onDamage()
 	end
@@ -275,28 +292,16 @@ end
 function Skill:s_stealmp(skillinfo, master)
 	-- 获取距离最近的敌人
 	local enemy = self:GetSufferer(skillinfo, master, "closest")
-	if not enemy then
-		return
-	end
 
 	master:ReducePower(10000, self.power_index)
-	master.atktime = 2
+	master:ResetAtkTime()
 
 	--调整朝向
-	if master:getPositionX() > enemy:getPositionX() then
-		master.armature:setScaleX(-0.5)
-	else
-		master.armature:setScaleX(0.5)
-	end
+	Skill:TurnFace(master, enemy:getPositionX())
 
 	local function onDamage()
 		master:DelCallBack("onDamageEvent", onDamage)
 		local scene = display.getRunningScene()
-
-		-- 添加buff
-		if skillinfo.AddBuff then
-			Buff:AddBuff(master, skillinfo.AddBuff)
-		end
 
 		-- 计算伤害
 		local function stealPower()
@@ -305,31 +310,32 @@ function Skill:s_stealmp(skillinfo, master)
 				master:doEvent("stop")
 				return
 			end
-			master.stealPowerTimer = master.stealPowerTimer + 0.5
+			Effect:updatePtPLineEffect(master.temp_effect, master, enemy)
+			master.stealPowerTimer = master.stealPowerTimer + 0.1
 			if master.stealPowerTimer > skillinfo.DurationTime then
 				master:doEvent("stop")
 				return
 			end
 
-			master:IncPower(5)
-			enemy:ReducePowerAll(5)
+			master:IncPower(1)
+			enemy:ReducePowerAll(1)
 		end
 
 		-- 播放特效
 		if skillinfo.Effect then
-			Effect:createEffect(skillinfo.Effect, master, enemy)
+			master.temp_effect = Effect:createEffect(skillinfo.Effect, master, enemy)
 		end
 
 		if skillinfo.DurationTime and skillinfo.DurationTime > 0 then
-			master.skillhandle = scheduler.scheduleGlobal(stealPower, 0.5)
+			master.skillhandle = scheduler.scheduleGlobal(stealPower, 0.1)
 			master.stealPowerTimer = 0
 			stealPower()
 		end
 	end
 
 	if skillinfo.PreAction then
+		master:DoMagic("attack2")
 		master:AddCallBack("onDamageEvent", onDamage)
-		master:DoMagic(1)
 	else
 		onDamage()
 	end
@@ -338,17 +344,20 @@ end
 -- 穿刺
 function Skill:s_puncture(skillinfo, master)
 	-- 获取距离最近的敌人
-	local enemys = self:GetSufferer(skillinfo, master, "line")
+	local enemys = self:GetSufferer(skillinfo, master, "line") or {}
 
 	master:ReducePower(10000, self.power_index)
-	master.atktime = 2
+	master:ResetAtkTime()
 
 	local function onDamage()
 		master:DelCallBack("onDamageEvent", onDamage)
 		local scene = display.getRunningScene()
 		-- 播放特效
 		if skillinfo.Effect and string.len(skillinfo.Effect) > 0 then
-			Effect:createEffect(skillinfo.Effect, master)
+			local effect = Effect:createEffect(skillinfo.Effect, master)
+			if effect then
+				effect:setPosition(master:getPositionX() + getEffectOffset(skillinfo, master), master:getPositionY())
+			end
 		end
 
 		local masterPos = cc.p(master:getPosition())
@@ -359,16 +368,13 @@ function Skill:s_puncture(skillinfo, master)
 
 			local function doEffect()
 				--目标死亡，不处理
-				if enemys[i]:IsDead() then
+				if enemys[i]:IsDead() or not enemys[i]:CanBeSelect() then
 					return
 				end
-				enemys[i]:Hold(skillinfo.DurationTime)
-				local moveAction = cc.JumpTo:create(0.7, enemyPos, 100, 1)
-				enemys[i]:runAction(moveAction)
+				-- 加buff
+				Buff:AddBuff(enemys[i], skillinfo.AddBuff)
 				-- 计算伤害
-				if skillinfo.EffProp then
-					enemys[i]:ReduceHp(skillinfo.Damage, master)
-				end
+				enemys[i]:ReduceHp(skillinfo.Damage, master)
 			end
 
 			if delay > 0 then
@@ -380,8 +386,8 @@ function Skill:s_puncture(skillinfo, master)
 	end
 
 	if skillinfo.PreAction then
-		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic()
+		master:AddCallBack("onDamageEvent", onDamage)
 	else
 		onDamage()
 	end
@@ -391,68 +397,203 @@ end
 function Skill:s_sheep(skillinfo, master)
 	-- 获取距离最近的敌人
 	local enemy = self:GetSufferer(skillinfo, master, "closest")
-	if not enemy then
-		return
-	end
 	master:ReducePower(10000, self.power_index)
-	master.atktime = 2
+	master:ResetAtkTime()
 	--调整朝向
-    if master:getPositionX() > enemy:getPositionX() then
-        master.armature:setScaleX(-0.5)
-    else
-        master.armature:setScaleX(0.5)
-    end
+    Skill:TurnFace(master, enemy:getPositionX())
+
 	local function onDamage()
 		master:DelCallBack("onDamageEvent", onDamage)
 		--目标死亡，不处理
-		if enemy:IsDead() then
+		if enemy:IsDead() or not enemy:CanBeSelect() then
 			return
 		end
-		local scene = display.getRunningScene()
-		
-		-- 隐藏本体
-		enemy.armature:setVisible(false)
-		enemy.armature:getAnimation():stop()
 
-		local pos = cc.p(enemy.armature:getPosition())
-
-		-- 显示绵羊
-		if enemy.subs then
-			enemy.subs:removeSelf()
-			enemy.subs = nil
-		end
-
-		enemy.subs = display.newSprite("image/sheep.png", pos.x, pos.y)
-		enemy.subs:setScale(0.4)
-		if enemy.side == 1 then
-			enemy.subs:setScaleX(-0.4)
-		end
-		enemy:addChild(enemy.subs)
-		enemy:Hold(skillinfo.DurationTime)
-
-		local function skillEnd()
-			enemy.schedulers["sheepTimer"] = nil
-			enemy.armature:setVisible(true)
-			if enemy.subs then
-				enemy.subs:removeSelf()
-				enemy.subs = nil
-			end
-		end
-
-		if skillinfo.DurationTime and skillinfo.DurationTime > 0 then
-			if enemy.schedulers["sheepTimer"] then
-				scheduler.unscheduleGlobal(enemy.schedulers["sheepTimer"])
-				enemy.schedulers["sheepTimer"] = nil
-			end
-			enemy.schedulers["sheepTimer"] = scheduler.performWithDelayGlobal(skillEnd, skillinfo.DurationTime)
-		end
+		Buff:AddBuff(enemy, skillinfo.AddBuff)
 	end
 
 	if skillinfo.PreAction then
-		master:AddCallBack("onDamageEvent", onDamage)
 		master:DoMagic()
+		master:AddCallBack("onDamageEvent", onDamage)
 	else
 		onDamage()
+	end
+end
+
+-- 无敌斩
+function Skill:s_omnislash(skillinfo, master)
+	-- 获取距离最近的敌人
+	local enemy = self:GetSufferer(skillinfo, master, "closest")
+
+	master:ReducePower(10000, self.power_index)
+	master:ResetAtkTime()
+
+	-- 动作角度序列
+	local angles = {0, 30, -30, -30, 30, 0}
+	local repeatTimes = 0
+
+	local function endFunction()
+		master:DelCallBack("AnimationEvent", repeatFunction)
+		master:setPositionX(master:getPositionX() - 100)
+		master:setRotation(0)
+		master:SetCanBeSelect(true)
+		if repeatTimes > 3 then
+			master:setScaleX(-master:getScaleX())
+		end
+	end
+
+	local function repeatFunction(movementID, movementType)
+		if movementID ~= skillinfo.PreAction or 
+			movementType ~= ccs.MovementEventType.complete then
+			return
+		end
+		-- 计数
+		repeatTimes = repeatTimes + 1
+		if repeatTimes > 6 then
+			endFunction()
+			return
+		end
+
+		if repeatTimes > 3 then
+			master:setScaleX(-master:getScaleX())
+		end 
+
+		--技能逻辑
+		if repeatTimes > 1 then
+			enemy = self:GetSufferer(skillinfo, master, "random")
+			if not enemy then
+				endFunction()
+				return
+			end
+		end
+		-- 隐藏血条
+		master.progress:setVisible(false)
+		-- 移动到目标位置
+		master:setPosition(enemy:getPosition())
+		master:setRotation(angles[repeatTimes])
+		-- 播发施法动作
+		master:DoMagic(skillinfo.PreAction)
+		master:SetCanBeSelect(false)
+		local function onDamage()
+			--目标死亡，不处理
+			if enemy:IsDead() then
+				return
+			end
+			enemy:ReduceHp(master:GetAttack(), master)
+		end
+		master:AddCallBack("onDamageEvent", onDamage)
+	end
+	master:AddCallBack("AnimationEvent", repeatFunction)
+
+	repeatFunction(skillinfo.PreAction, ccs.MovementEventType.complete)
+	
+end
+
+-- 剑刃风暴
+function Skill:s_bladefury(skillinfo, master)
+	local target = Skill:GetSufferer(skillinfo, master, "farthest")
+	-- 持续时间
+	local time = skillinfo.DurationTime
+	if time <= 0 then
+		return
+	end
+
+	master:ReducePower(10000, self.power_index)
+	master:ResetAtkTime()
+
+	local endPos = cc.p(master:getPosition())
+
+	local action = transition.sequence(
+		{cc.MoveTo:create(time/2, cc.p(target:getPosition())), 
+		cc.MoveTo:create(time/2, endPos), 
+		cc.CallFunc:create(function() 
+			master:Stop()
+			master:SetCanBeSelect(true)
+			end)})
+
+	master:SetCanBeSelect(false)
+	master:runAction(action)
+	master:DoMagic(skillinfo.PreAction)
+
+	-- 计算伤害
+	function DoDamage()
+		local enemys = Skill:GetSufferer(skillinfo, master, "line") or {}
+		for i = 1, #enemys do
+			enemys[i]:ReduceHp(skillinfo.Damage/2, master)
+		end
+	end
+
+	master.skillhandle = scheduler.scheduleGlobal(DoDamage, 0.5)
+end
+
+-- 召唤NPC
+function Skill:CallNpc(skillinfo, master)
+	master:ReducePower(10000, self.power_index)
+	master:ResetAtkTime()
+
+	local function onDamage()
+		master:DelCallBack("onDamageEvent", onDamage)
+		local scene = display.getRunningScene()
+		local npc = Npc.new(skillinfo.Effect)
+		npc.side = master.side
+		npc:setPosition(cc.p(master:getPositionX() + skillinfo.CastDistance, master:getPositionY()))
+		npc:setLocalZOrder(master:getLocalZOrder())
+		scene:addChild(npc)
+	end
+
+	if skillinfo.PreAction then
+		master:DoMagic()
+		master:AddCallBack("onDamageEvent", onDamage)
+	else
+		onDamage()
+	end
+end
+
+-- 远程攻击
+function FlyEffect(skillinfo, master, target, func)
+    local starPos = master.armature:convertToWorldSpace(cc.p(master.armature:getBone("atkpoint"):getPosition()))
+    local targetPos = cc.p(target:getPositionX(), target:getPositionY()+100)
+    local effect = Effect:NewEffect(skillinfo.Effect)
+    effect:setPosition(master:getPosition())
+    effect:setLocalZOrder(master:getLocalZOrder())
+    local angle = cc.pToAngleSelf(cc.pSub(targetPos, starPos))
+    effect:setRotation(-math.deg(angle))
+    local distance = cc.pGetDistance(starPos, targetPos)
+    local action = transition.sequence(
+        {cc.MoveTo:create(distance / display.width, targetPos), 
+        cc.CallFunc:create(function()
+            func()
+            effect:removeSelf()
+            end)})
+    effect:runAction(action)
+end
+
+-- 飞行技能
+function Skill:FlySkill(skillinfo, master)
+	local target = Skill:GetSufferer(skillinfo, master, "closest")
+	master:ReducePower(10000, self.power_index)
+	master:ResetAtkTime()
+
+	local function BeginEffect()
+		master:DelCallBack("onDamageEvent", BeginEffect)
+		
+		local function OnDamage()
+			-- 添加buff
+			if skillinfo.AddBuff then
+				Buff:AddBuff(target, skillinfo.AddBuff)
+			end
+			-- 计算伤害
+			target:ReduceHp(skillinfo.Damage, master)
+		end
+
+		FlyEffect(skillinfo, master, target, OnDamage)
+	end
+
+	if skillinfo.PreAction then
+		master:DoMagic()
+		master:AddCallBack("onDamageEvent", BeginEffect)
+	else
+		BeginEffect()
 	end
 end
 

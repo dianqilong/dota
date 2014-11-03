@@ -1,9 +1,8 @@
-
+local scheduler = require("framework.scheduler")
 local Hero = import("..roles.Hero")
 local SkillPanel = import("..ui.skillpanel")
 local dataManager = import("..datamanager.datamanager")
 local Skill = import("..module.Skill")
-local scheduler = require("framework.scheduler")
 
 local MainScene = class("MainScene", function()
     return display.newScene("MainScedne")
@@ -23,8 +22,8 @@ end
 -- 初始化场景
 function MainScene:initScene()
     -- if true then
-    --     math.randomseed(os.time())
-    --     print(math.random(50)/100+0.7)
+    --     local a = nil or {}
+    --     print(a)
     --     return
     -- end
     -- 背景
@@ -32,23 +31,23 @@ function MainScene:initScene()
     self:addChild(background)
 
     -- 地图可行走范围
-    self.map_top = 360
-    self.map_bottom = 160
+    self.map_top = 310 --360
+    self.map_bottom = 210 --160
     self.map_space = (self.map_top - self.map_bottom)/5
 
     self.lefts = {}
     self.rights = {}
 
     -- 主玩家
-    self.hero = Hero.new("hero_CW", 1)
+    self.hero = Hero.new("hero_CM", 1)
     self.hero.IsUseAI = false
     self.lefts[#self.lefts+1] = self.hero
     self.hero.IsPlayer = true
     self.hero.container = self.lefts
     self.hero:setPositionY(self.map_top)
-    -- self.hero:setPositionX(500)
     self:addChild(self.hero)
-    -- self.hero.hp = 1000
+
+    self.hero.powers[4] = 1000
 
     -- 友军AI
     self:addTeam()
@@ -63,26 +62,10 @@ function MainScene:initScene()
 end
 
 function MainScene:addTeam()
-    -- function addObj()
-    --     local team = Hero.new("hero_lion", 1)
-    --     self.lefts[#self.lefts+1] = team
-    --     team.index = #self.lefts
-    --     team.container = self.lefts
-    --     self:addChild(team)
-    --     if #self.lefts < 5 then
-    --         self:addTeam()
-    --     end
-    -- end
-    -- scheduler.performWithDelayGlobal(addObj, 0.5)
-
-    for i = 1, 4 do
-        local team
-        if i == 2 or i == 3 then
-            team = Hero.new("hero_CW", 1)
-        else
-            team = Hero.new("hero_lion", 1)
-        end
-        team:setPositionY(self.map_top-self.map_space*#self.lefts)
+    local list = {"hero_CW","hero_JUGG","hero_TH","hero_lion"}
+    for i = 1, #list do
+        local team = Hero.new(list[i], 1)
+        team:setPositionY(self.map_top-self.map_space*i)
         self.lefts[#self.lefts+1] = team
         team.container = self.lefts
         self:addChild(team)
@@ -90,26 +73,10 @@ function MainScene:addTeam()
 end
 
 function MainScene:addEnemy()
-    -- function addObj()
-    --     local enemy = Hero.new("hero_lion", 2)
-    --     self.rights[#self.rights+1] = enemy
-    --     enemy.index = #self.rights
-    --     enemy.container = self.rights
-    --     self:addChild(enemy)
-    --     if #self.rights < 5 then
-    --         self:addEnemy()
-    --     end
-    -- end
-    -- scheduler.performWithDelayGlobal(addObj, 0.5)
-
-    for i = 1, 5 do
-        local enemy
-        if i == 2 or i == 4 then
-            enemy = Hero.new("hero_CW", 2)
-        else
-            enemy = Hero.new("hero_lion", 2)
-        end
-        enemy:setPositionY(self.map_top-self.map_space*#self.rights)
+    local list = {"hero_CM","hero_JUGG","hero_TH","hero_lion","hero_CW"}
+    for i = 1, #list do
+        local enemy = Hero.new(list[i], 2)
+        enemy:setPositionY(self.map_top-self.map_space*(i-1))
         self.rights[#self.rights+1] = enemy
         enemy.container = self.rights
         self:addChild(enemy)

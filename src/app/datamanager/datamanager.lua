@@ -13,6 +13,7 @@ function DataManager:ctor()
 	self:loadSkillConfig()
 	self:loadEffectConfig()
 	self:loadBuffConfig()
+	self:loadNpcConfig()
 
 	self.effect = Effect:new()
 	self.skill = Skill:new()
@@ -22,7 +23,6 @@ end
 -- 获取全局递增索引
 function DataManager:getIncIndex()
 	self.index = self.index + 1
-	print("u_index = " .. self.index)
 	return self.index
 end
 
@@ -46,6 +46,11 @@ function DataManager:loadBuffConfig()
 	self.buffconfig = loadCsvFile(path)
 end
 
+function DataManager:loadNpcConfig()
+	local path = cc.FileUtils:getInstance():fullPathForFilename("config/npcconfig.csv")
+	self.npcconfig = loadCsvFile(path)
+end
+
 function DataManager:getHeroConf(heroID)
 	return self.heroconfig[heroID]
 end
@@ -60,6 +65,14 @@ end
 
 function DataManager:getBuffConf(buffID)
 	return self.buffconfig[buffID]
+end
+
+function DataManager:setBuffConf(buffID, config)
+	self.buffconfig[buffID] = config
+end
+
+function DataManager:getNpcConf(npcID)
+	return self.npcconfig[npcID]
 end
 
 return DataManager
